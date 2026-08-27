@@ -1,0 +1,204 @@
+// Prisma schema for Axumify Private Personal Trading Journal (PostgreSQL + Supabase)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model User {
+  id            String          @id @default(cuid())
+  name          String?
+  email         String          @unique
+  passwordHash  String
+  timezone      String          @default("UTC")
+  currency      String          @default("USD")
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  trades        Trade[]
+  backtestTrades BacktestTrade[]
+  checklists    Checklist[]
+  tradingRules  TradingRule[]
+  propAccounts  PropAccount[]
+  goals         Goal[]
+}
+
+model Trade {
+  id              String       @id @default(cuid())
+  userId          String
+  user            User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // General Details
+  date            DateTime
+  instrument      String
+  market          String       @default("FOREX") // FOREX, INDICES, CRYPTO, STOCKS, COMMODITIES
+  session         String       @default("New York") // Asian, London, New York, London Close
+  direction       String       // LONG, SHORT
+  timeframe       String?      @default("15m")
+
+  // Pricing & Quantities (Decimal for Financial Precision)
+  entryPrice      Decimal      @db.Decimal(18, 5)
+  stopLoss        Decimal      @db.Decimal(18, 5)
+  takeProfit      Decimal      @db.Decimal(18, 5)
+  exitPrice       Decimal?     @db.Decimal(18, 5)
+  positionSize    Decimal?     @db.Decimal(18, 5)
+  riskAmount      Decimal?     @db.Decimal(18, 5)
+  riskPercentage  Decimal?     @db.Decimal(18, 5)
+  plannedRR       Decimal?     @db.Decimal(18, 5)
+  actualR         Decimal      @default(0.0) @db.Decimal(18, 5)
+  pnl             Decimal      @default(0.0) @db.Decimal(18, 5)
+
+  // Trade Performance & Execution Metrics
+  mae             Decimal?     @db.Decimal(18, 5) // Maximum Adverse Excursion
+  mfe             Decimal?     @db.Decimal(18, 5) // Maximum Favorable Excursion
+  commission      Decimal?     @db.Decimal(18, 5) // Execution Commission
+  fees            Decimal?     @db.Decimal(18, 5) // Platform / Broker Fees
+  swap            Decimal?     @db.Decimal(18, 5) // Overnight Swap
+  slippage        Decimal?     @db.Decimal(18, 5) // Execution Slippage (pips/ticks)
+
+  result          String       @default("BREAKEVEN") // WIN, LOSS, BREAKEVEN
+  grade           String?      // A_PLUS, A, B_PLUS, B, C, D, F
+
+  // ICT Concepts & Setup Information
+  ictConcepts     String       @default("[]")
+  setup           String?
+  customTags      String       @default("[]")
+
+  // Trade Plan Section
+  htfBias         String?
+  marketCondition String?
+  liquidityTarget String?
+  entryModel      String?
+  confirmation    String?
+  invalidation    String?
+  targetReason    String?
+  reasonForEntry  String?
+
+  // Trading Psychology & Ratings (1 to 5)
+  psychConfidence Int?         @default(3)
+  psychPatience   Int?         @default(3)
+  psychFear       Int?         @default(1)
+  psychGreed      Int?         @default(1)
+  psychFOMO       Int?         @default(1)
+  psychRevenge    Int?         @default(1)
+  psychDiscipline Int?         @default(4)
+  psychStress     Int?         @default(2)
+
+  emotionBefore   String?
+  emotionDuring   String?
+  emotionAfter    String?
+  followedPlan    Boolean      @default(true)
+  brokeRule       Boolean      @default(false)
+  enteredTooEarly Boolean      @default(false)
+  movedSL         Boolean      @default(false)
+  closedEarly     Boolean      @default(false)
+  overtraded      Boolean      @default(false)
+
+  // Reflection Tags & Notes
+  mistakes        String       @default("[]")
+  positives       String       @default("[]")
+  notes           String?
+
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  images          TradeImage[]
+}
+
+model TradeImage {
+  id          String   @id @default(cuid())
+  tradeId     String
+  trade       Trade    @relation(fields: [tradeId], references: [id], onDelete: Cascade)
+  type        String   // BEFORE_ENTRY, ENTRY, AFTER_TRADE
+  url         String   // Supabase Storage path or signed URL reference
+  caption     String?
+  createdAt   DateTime @default(now())
+}
+
+model BacktestTrade {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date        DateTime
+  instrument  String
+  session     String   @default("New York")
+  setup       String?
+  direction   String   // LONG, SHORT
+  entryPrice  Decimal  @db.Decimal(18, 5)
+  stopLoss    Decimal  @db.Decimal(18, 5)
+  takeProfit  Decimal  @db.Decimal(18, 5)
+  exitPrice   Decimal  @db.Decimal(18, 5)
+  result      String   // WIN, LOSS, BREAKEVEN
+  rMultiple   Decimal  @default(0.0) @db.Decimal(18, 5)
+  pnl         Decimal  @default(0.0) @db.Decimal(18, 5)
+  notes       String?
+  imageUrl    String?
+  createdAt   DateTime @default(now())
+}
+
+model Checklist {
+  id          String          @id @default(cuid())
+  userId      String
+  user        User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title       String
+  category    String          @default("PRE_MARKET")
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  items       ChecklistItem[]
+}
+
+model ChecklistItem {
+  id          String    @id @default(cuid())
+  checklistId String
+  checklist   Checklist @relation(fields: [checklistId], references: [id], onDelete: Cascade)
+  text        String
+  checked     Boolean   @default(false)
+  order       Int       @default(0)
+}
+
+model TradingRule {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  text        String
+  category    String   @default("GENERAL") // RISK, EXECUTION, PSYCHOLOGY
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+}
+
+model PropAccount {
+  id               String   @id @default(cuid())
+  userId           String
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  firmName         String
+  accountSize      Decimal  @db.Decimal(18, 5)
+  startingBalance  Decimal  @db.Decimal(18, 5)
+  currentBalance   Decimal  @db.Decimal(18, 5)
+  profitTarget     Decimal  @db.Decimal(18, 5)
+  maxDailyLoss     Decimal  @db.Decimal(18, 5)
+  maxTotalDrawdown Decimal  @db.Decimal(18, 5)
+  currentDrawdown  Decimal  @default(0.0) @db.Decimal(18, 5)
+  status           String   @default("EVALUATION")
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
+
+model Goal {
+  id           String    @id @default(cuid())
+  userId       String
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title        String
+  targetValue  Decimal   @db.Decimal(18, 5)
+  currentValue Decimal   @default(0.0) @db.Decimal(18, 5)
+  unit         String    @default("Trades")
+  deadline     DateTime?
+  isCompleted  Boolean   @default(false)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+}
