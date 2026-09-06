@@ -570,7 +570,7 @@ export default function AddTradePage() {
                     <span className="text-base font-extrabold">LOSS</span>
                   </div>
                   <span className="text-xs font-mono font-bold">
-                    -1.00R ({formatPnlDisplay(computePnlFromResult(riskAmtNum, effectiveRRMagnitude, "LOSS"))})
+                    {formatSignedRDisplay(effectiveRRMagnitude, "LOSS")} ({formatPnlDisplay(computePnlFromResult(riskAmtNum, effectiveRRMagnitude, "LOSS"))})
                   </span>
                 </button>
 
@@ -587,7 +587,7 @@ export default function AddTradePage() {
                     <MinusCircle className="w-5 h-5" />
                     <span className="text-base font-extrabold">BREAKEVEN</span>
                   </div>
-                  <span className="text-xs font-mono font-bold">0.00R ({formatPnlDisplay(0)})</span>
+                  <span className="text-xs font-mono font-bold">{formatSignedRDisplay(effectiveRRMagnitude, "BREAKEVEN")} ({formatPnlDisplay(computePnlFromResult(riskAmtNum, effectiveRRMagnitude, "BREAKEVEN"))})</span>
                 </button>
               </div>
             </div>

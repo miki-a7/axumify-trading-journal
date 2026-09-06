@@ -68,7 +68,7 @@ export default function EditTradePage() {
   const [riskAmount, setRiskAmount] = useState<number | "">(300);
   const [riskPercentage, setRiskPercentage] = useState<number | "">(1.0);
   // Actual R:R magnitude — user enters positive number (e.g. 5), sign derived from result
-  const [actualRRInput, setActualRRInput] = useState<number | "">(2.0);
+  const [actualRRInput, setActualRRInput] = useState<number | "">("");
   const [result, setResult] = useState<"WIN" | "LOSS" | "BREAKEVEN">("WIN");
   const [grade, setGrade] = useState("A_PLUS");
 
@@ -679,7 +679,7 @@ export default function EditTradePage() {
                     <span className="text-base font-extrabold">WIN</span>
                   </div>
                   <span className="text-xs font-mono font-bold">
-                    +{effectiveRRMagnitude}R (+$${(riskAmtNum * effectiveRRMagnitude).toLocaleString()})
+                    {formatSignedRDisplay(effectiveRRMagnitude, "WIN")} ({formatPnlDisplay(computePnlFromResult(riskAmtNum, effectiveRRMagnitude, "WIN"))})
                   </span>
                 </button>
 
@@ -697,7 +697,7 @@ export default function EditTradePage() {
                     <span className="text-base font-extrabold">LOSS</span>
                   </div>
                   <span className="text-xs font-mono font-bold">
-                    -1.00R (-$${riskAmtNum.toLocaleString()})
+                    {formatSignedRDisplay(effectiveRRMagnitude, "LOSS")} ({formatPnlDisplay(computePnlFromResult(riskAmtNum, effectiveRRMagnitude, "LOSS"))})
                   </span>
                 </button>
 
@@ -714,7 +714,7 @@ export default function EditTradePage() {
                     <MinusCircle className="w-5 h-5" />
                     <span className="text-base font-extrabold">BREAKEVEN</span>
                   </div>
-                  <span className="text-xs font-mono font-bold">0.00R ($0.00)</span>
+                  <span className="text-xs font-mono font-bold">{formatSignedRDisplay(effectiveRRMagnitude, "BREAKEVEN")} ({formatPnlDisplay(computePnlFromResult(riskAmtNum, effectiveRRMagnitude, "BREAKEVEN"))})</span>
                 </button>
               </div>
             </div>
