@@ -51,6 +51,7 @@ export async function POST(req: NextRequest) {
       success: true,
       direction: detected.direction,
       entryPrice: detected.entryPrice,
+      exitPrice: detected.exitPrice,
       stopLoss: detected.stopLoss,
       takeProfit: detected.takeProfit,
       actualR: detected.actualR,

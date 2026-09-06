@@ -6,6 +6,7 @@
 require("tsx/cjs");
 
 const { calculateSingleTradeMetrics } = require("./src/lib/calculations/stats.ts");
+const { parseTradingViewText } = require("./src/lib/ocr/tradingview.ts");
 
 let passed = 0;
 let failed = 0;
@@ -161,6 +162,16 @@ console.log("AXUMIFY Calculation Tests\n");
   });
   approx(m.plannedRR, 1.5, "User plannedRR 1.5 preserved");
   approx(m.actualR, 1.5, "WIN uses user plannedRR 1.5");
+}
+
+// OCR extracts labeled short entry and exit prices
+{
+  const detected = parseTradingViewText("Short Entry: 100.25 Exit: 99.75 SL: 101.00 TP: 98.00");
+  assert(detected.direction === "SHORT", "OCR: short direction");
+  approx(detected.entryPrice, 100.25, "OCR: entry price");
+  approx(detected.exitPrice, 99.75, "OCR: exit price");
+  approx(detected.stopLoss, 101, "OCR: stop loss");
+  approx(detected.takeProfit, 98, "OCR: take profit");
 }
 
 console.log(`\nTOTAL: ${passed} passed, ${failed} failed`);

@@ -352,6 +352,7 @@ export default function EditTradePage() {
     if (!detectedOCR) return;
     if (detectedOCR.direction) setDirection(detectedOCR.direction);
     if (detectedOCR.entryPrice !== undefined) setEntryPrice(detectedOCR.entryPrice);
+    if (detectedOCR.exitPrice !== undefined) setExitPrice(detectedOCR.exitPrice);
     if (detectedOCR.stopLoss !== undefined) setStopLoss(detectedOCR.stopLoss);
     if (detectedOCR.takeProfit !== undefined) setTakeProfit(detectedOCR.takeProfit);
     if (detectedOCR.actualR !== undefined && detectedOCR.actualR > 0) setActualRRInput(detectedOCR.actualR);
@@ -587,7 +588,7 @@ export default function EditTradePage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 text-xs">
+            <div className="grid grid-cols-2 sm:grid-cols-6 gap-3 text-xs">
               <div className="p-2.5 rounded-lg bg-[#050B14] border border-[#1E293B]">
                 <span className="text-[10px] text-[#94A3B8] block font-semibold">Direction</span>
                 <span className={`font-mono font-extrabold ${detectedOCR.direction === "LONG" ? "text-[#22C55E]" : "text-[#EF4444]"}`}>
@@ -603,6 +604,10 @@ export default function EditTradePage() {
               <div className="p-2.5 rounded-lg bg-[#050B14] border border-[#1E293B]">
                 <span className="text-[10px] text-[#94A3B8] block font-semibold">Entry Price</span>
                 <span className="font-mono font-bold text-white">{detectedOCR.entryPrice ?? "—"}</span>
+              </div>
+              <div className="p-2.5 rounded-lg bg-[#050B14] border border-[#1E293B]">
+                <span className="text-[10px] text-[#94A3B8] block font-semibold">Exit Price</span>
+                <span className="font-mono font-bold text-white">{detectedOCR.exitPrice ?? "—"}</span>
               </div>
               <div className="p-2.5 rounded-lg bg-[#050B14] border border-[#1E293B]">
                 <span className="text-[10px] text-[#94A3B8] block font-semibold">Stop Loss</span>

@@ -3,6 +3,7 @@ import { isStoragePath } from "./trade-image";
 
 export interface OCRDetectedData {
   direction?: "LONG" | "SHORT";
+  exitPrice?: number;
   stopLoss?: number;
   takeProfit?: number;
   entryPrice?: number;
@@ -64,6 +65,7 @@ export async function runOcrOnDataUrl(dataUrl: string): Promise<OCRDetectedData 
     return {
       direction: detected.direction ?? json.direction ?? undefined,
       entryPrice: detected.entryPrice ?? json.entryPrice ?? undefined,
+      exitPrice: detected.exitPrice ?? json.exitPrice ?? undefined,
       stopLoss: detected.stopLoss ?? json.stopLoss ?? undefined,
       takeProfit: detected.takeProfit ?? json.takeProfit ?? undefined,
       actualR: detected.actualR ?? json.actualR ?? detected.plannedRR ?? json.plannedRR ?? undefined,

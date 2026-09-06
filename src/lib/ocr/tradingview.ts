@@ -4,6 +4,7 @@ import Tesseract, { PSM } from "tesseract.js";
 export interface DetectedTradeLevels {
   direction: "LONG" | "SHORT" | null;
   entryPrice: number | null;
+  exitPrice: number | null;
   stopLoss: number | null;
   takeProfit: number | null;
   /** Detected Actual R:R magnitude (always positive). */
@@ -19,6 +20,7 @@ export function parseTradingViewText(rawText: string): DetectedTradeLevels {
   const text = rawText || "";
   let direction: "LONG" | "SHORT" | null = null;
   let entryPrice: number | null = null;
+  let exitPrice: number | null = null;
   let stopLoss: number | null = null;
   let takeProfit: number | null = null;
   let actualR: number | null = null;
@@ -56,6 +58,12 @@ export function parseTradingViewText(rawText: string): DetectedTradeLevels {
   if (entryMatch && entryMatch[1]) {
     const val = parseFloat(entryMatch[1]);
     if (!isNaN(val) && val > 0) entryPrice = val;
+  }
+
+  const exitMatch = text.match(/(?:exit(?:\s*price)?|close(?:d)?(?:\s*price)?|closing(?:\s*price)?)[:\s]*([0-9]{1,6}(?:\.[0-9]{1,6})?)/i);
+  if (exitMatch && exitMatch[1]) {
+    const val = parseFloat(exitMatch[1]);
+    if (!isNaN(val) && val > 0) exitPrice = val;
   }
 
   // 4. Extract all floating point numbers that look like prices
@@ -125,6 +133,7 @@ export function parseTradingViewText(rawText: string): DetectedTradeLevels {
   return {
     direction,
     entryPrice,
+    exitPrice,
     stopLoss,
     takeProfit,
     actualR,
@@ -147,10 +156,17 @@ export async function extractTradeLevelsFromImage(imageBuffer: Buffer): Promise<
     const width = metadata.width || 1000;
     const height = metadata.height || 600;
 
-    // 1. First pass: Full image OCR for explicit text labels
+    // Reuse one worker for both passes; creating a second worker reloads the language model.
+    const worker = await Tesseract.createWorker("eng");
+
+    // 1. First pass: downscaled OCR for explicit text labels
     let rawText = "";
     try {
-      const fullOcrRes = await Tesseract.recognize(imageBuffer, "eng", { logger: () => {} });
+      const ocrImage = await image
+        .resize({ width: 1600, withoutEnlargement: true })
+        .jpeg({ quality: 85 })
+        .toBuffer();
+      const fullOcrRes = await worker.recognize(ocrImage);
       rawText = fullOcrRes.data?.text || "";
     } catch {
       // Ignore if full OCR fails
@@ -158,6 +174,7 @@ export async function extractTradeLevelsFromImage(imageBuffer: Buffer): Promise<
 
     const textDetected = parseTradingViewText(rawText);
     if (textDetected.confidence === "HIGH" && textDetected.entryPrice && textDetected.stopLoss && textDetected.takeProfit) {
+      await worker.terminate();
       return textDetected;
     }
 
@@ -236,7 +253,6 @@ export async function extractTradeLevelsFromImage(imageBuffer: Buffer): Promise<
       .sharpen()
       .toBuffer();
 
-    const worker = await Tesseract.createWorker("eng");
     const axisOcrRes = await worker.recognize(croppedAxisBuf, {}, { hocr: true });
 
     const hocr = axisOcrRes.data.hocr || "";
@@ -363,6 +379,7 @@ export async function extractTradeLevelsFromImage(imageBuffer: Buffer): Promise<
     let stopLoss: number | null = textDetected.stopLoss ?? findNearestPrice(toolSlY);
     let entryPrice: number | null = textDetected.entryPrice ?? findNearestPrice(toolEntryY);
     let takeProfit: number | null = textDetected.takeProfit ?? findNearestPrice(toolTpY);
+    const exitPrice: number | null = textDetected.exitPrice;
 
     // Fallback using sorted right axis prices
     if (!entryPrice || !stopLoss) {
@@ -408,6 +425,7 @@ export async function extractTradeLevelsFromImage(imageBuffer: Buffer): Promise<
     return {
       direction: direction || "SHORT",
       entryPrice,
+      exitPrice,
       stopLoss,
       takeProfit,
       actualR,
