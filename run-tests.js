@@ -133,6 +133,21 @@ console.log("AXUMIFY Calculation Tests\n");
   approx(m.pnl, 900, "SHORT spec WIN: P&L +$900");
 }
 
+// SHORT price-derived R:R when no explicit R:R is provided
+{
+  const m = calculateSingleTradeMetrics({
+    direction: "SHORT",
+    entryPrice: 100,
+    stopLoss: 101,
+    takeProfit: 98,
+    riskAmount: 300,
+    result: "WIN",
+  });
+  approx(m.plannedRR, 2, "SHORT price-derived R:R");
+  approx(m.actualR, 2, "SHORT price-derived actual R");
+  approx(m.pnl, 600, "SHORT price-derived P&L");
+}
+
 // User plannedRR takes precedence over price-derived
 {
   const m = calculateSingleTradeMetrics({

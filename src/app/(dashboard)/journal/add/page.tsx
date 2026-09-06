@@ -65,7 +65,7 @@ export default function AddTradePage() {
   const [riskAmount, setRiskAmount] = useState<number | "">(300);
   const [riskPercentage, setRiskPercentage] = useState<number | "">(1.0);
   // Actual R:R magnitude — user enters positive number (e.g. 5), sign derived from result
-  const [actualRRInput, setActualRRInput] = useState<number | "">(2.0);
+  const [actualRRInput, setActualRRInput] = useState<number | "">("");
   const [result, setResult] = useState<"WIN" | "LOSS" | "BREAKEVEN">("WIN");
   const [grade, setGrade] = useState("A_PLUS");
 
