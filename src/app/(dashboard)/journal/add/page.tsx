@@ -47,11 +47,11 @@ export default function AddTradePage() {
 
   // Core Form State
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
-  const [instrument, setInstrument] = useState("EURUSD");
-  const [market, setMarket] = useState("FOREX");
-  const [session, setSession] = useState("New York");
+  const [instrument, setInstrument] = useState("");
+  const [market, setMarket] = useState("CUSTOM");
+  const [session, setSession] = useState("");
   const [direction, setDirection] = useState<"LONG" | "SHORT">("LONG");
-  const [timeframe, setTimeframe] = useState("15m");
+  const [timeframe, setTimeframe] = useState("");
 
   // Pricing (Optional)
   const [showAdvancedLevels, setShowAdvancedLevels] = useState(false);
@@ -83,31 +83,23 @@ export default function AddTradePage() {
   const [newImgUrl, setNewImgUrl] = useState("");
   const [newImgType, setNewImgType] = useState("BEFORE_ENTRY");
 
-  // ICT Concepts Multi-select
-  const ictOptions = [
-    "Buy-side liquidity", "Sell-side liquidity", "Liquidity sweep",
-    "Market Structure Shift (MSS)", "Break of Structure (BOS)", "Displacement",
-    "Fair Value Gap (FVG)", "Inverse FVG (IFVG)", "Order Block", "Breaker Block",
-    "Mitigation Block", "Premium", "Discount", "OTE", "Equal Highs", "Equal Lows",
-    "Previous Day High", "Previous Day Low", "Previous Week High", "Previous Week Low",
-    "Asian High", "Asian Low", "London High", "London Low"
-  ];
-  const [selectedIct, setSelectedIct] = useState<string[]>(["Liquidity sweep", "MSS", "FVG"]);
-  const [setup, setSetup] = useState("Liquidity Sweep + FVG Retracement");
+  const [configuration, setConfiguration] = useState<any>({ concepts: [], setups: [], entryModels: [], sessions: [], instruments: [] });
+  const [selectedIct, setSelectedIct] = useState<string[]>([]);
+  const [setup, setSetup] = useState("");
 
   // General Confluence (HTF) & Execution Confluence (LTF)
   const [gc, setGc] = useState("");
   const [ec, setEc] = useState("");
 
   // Trade Plan
-  const [htfBias, setHtfBias] = useState("Bullish");
-  const [marketCondition, setMarketCondition] = useState("Trending");
-  const [liquidityTarget, setLiquidityTarget] = useState("Previous Day High");
-  const [entryModel, setEntryModel] = useState("15m FVG Retracement");
-  const [confirmation, setConfirmation] = useState("1m MSS + Displacement");
-  const [invalidation, setInvalidation] = useState("Below Asian Low");
-  const [targetReason, setTargetReason] = useState("Unfilled liquidity gap above Asia High");
-  const [reasonForEntry, setReasonForEntry] = useState("Asian low swept cleanly at NY open with sharp displacement.");
+  const [htfBias, setHtfBias] = useState("");
+  const [marketCondition, setMarketCondition] = useState("");
+  const [liquidityTarget, setLiquidityTarget] = useState("");
+  const [entryModel, setEntryModel] = useState("");
+  const [confirmation, setConfirmation] = useState("");
+  const [invalidation, setInvalidation] = useState("");
+  const [targetReason, setTargetReason] = useState("");
+  const [reasonForEntry, setReasonForEntry] = useState("");
 
   // Psychology Ratings (1-5)
   const [psychConfidence, setPsychConfidence] = useState(5);
@@ -119,9 +111,9 @@ export default function AddTradePage() {
   const [psychDiscipline, setPsychDiscipline] = useState(5);
   const [psychStress, setPsychStress] = useState(1);
 
-  const [emotionBefore, setEmotionBefore] = useState("Calm & Focused");
-  const [emotionDuring, setEmotionDuring] = useState("Patient");
-  const [emotionAfter, setEmotionAfter] = useState("Confident");
+  const [emotionBefore, setEmotionBefore] = useState("");
+  const [emotionDuring, setEmotionDuring] = useState("");
+  const [emotionAfter, setEmotionAfter] = useState("");
   const [followedPlan, setFollowedPlan] = useState(true);
   const [brokeRule, setBrokeRule] = useState(false);
   const [enteredTooEarly, setEnteredTooEarly] = useState(false);
@@ -130,7 +122,7 @@ export default function AddTradePage() {
   const [overtraded, setOvertraded] = useState(false);
 
   const [mistakesInput, setMistakesInput] = useState("");
-  const [positivesInput, setPositivesInput] = useState("Clean execution following standard entry model.");
+  const [positivesInput, setPositivesInput] = useState("");
   const [notes, setNotes] = useState("");
 
   // Execution & Performance Metrics
@@ -164,6 +156,21 @@ export default function AddTradePage() {
   const computedPnl = computePnlFromResult(riskAmtNum, effectiveRRMagnitude, result);
 
   const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/configuration", { cache: "no-store" })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!data) return;
+        setConfiguration(data);
+        if (!session && data.sessions?.length) setSession(data.sessions[0].name);
+        if (!instrument && data.instruments?.length) {
+          setInstrument(data.instruments[0].symbol);
+          setMarket(data.instruments[0].market || "CUSTOM");
+        }
+      })
+      .catch(() => undefined);
+  }, []);
 
   const toggleIct = (item: string) => {
     setSelectedIct((prev) => (prev.includes(item) ? prev.filter((i) => i !== item) : [...prev, item]));
@@ -500,7 +507,7 @@ export default function AddTradePage() {
         {[
           { id: "general", label: "1. Core Trade Entry", icon: DollarSign },
           { id: "plan", label: "2. Trade Plan", icon: BookOpen },
-          { id: "ict", label: "3. ICT / SMC Setup", icon: Layers },
+          { id: "ict", label: "3. Concepts & Setup", icon: Layers },
           { id: "psych", label: "4. Psychology", icon: Brain },
           { id: "images", label: "5. Screenshots", icon: Upload },
         ].map((tab) => {
@@ -652,10 +659,8 @@ export default function AddTradePage() {
                   onChange={(e) => setSession(e.target.value)}
                   className="w-full px-3.5 py-2.5 rounded-xl bg-[#050B14] border border-[#1E293B] text-xs text-white"
                 >
-                  <option value="Asian">Asian Session</option>
-                  <option value="London">London Session</option>
-                  <option value="New York">New York Session</option>
-                  <option value="London Close">London Close</option>
+                  <option value="">Select a configured session</option>
+                  {configuration.sessions.map((item: any) => <option key={item.id} value={item.name}>{item.name}</option>)}
                 </select>
               </div>
 
@@ -666,11 +671,8 @@ export default function AddTradePage() {
                   onChange={(e) => setMarket(e.target.value)}
                   className="w-full px-3.5 py-2.5 rounded-xl bg-[#050B14] border border-[#1E293B] text-xs text-white"
                 >
-                  <option value="FOREX">Forex</option>
-                  <option value="INDICES">Indices</option>
-                  <option value="CRYPTO">Crypto</option>
-                  <option value="STOCKS">Stocks</option>
-                  <option value="COMMODITIES">Commodities</option>
+                  <option value="CUSTOM">Custom</option>
+                  {Array.from(new Set(configuration.instruments.map((item: any) => item.market))).map((item: any) => <option key={item} value={item}>{item}</option>)}
                 </select>
               </div>
 
@@ -944,13 +946,14 @@ export default function AddTradePage() {
 
               <div>
                 <label className="text-xs font-semibold text-[#94A3B8] block mb-1.5">Entry Model</label>
-                <input
-                  type="text"
-                  placeholder="e.g. 15m FVG Retracement, Judas Swing"
+                <select
                   value={entryModel}
                   onChange={(e) => setEntryModel(e.target.value)}
                   className="w-full px-3.5 py-2.5 rounded-xl bg-[#050B14] border border-[#1E293B] text-xs text-white"
-                />
+                >
+                  <option value="">Select a configured entry model</option>
+                  {configuration.entryModels.map((item: any) => <option key={item.id} value={item.name}>{item.name}</option>)}
+                </select>
               </div>
 
               <div>
@@ -1075,22 +1078,23 @@ export default function AddTradePage() {
           </div>
         )}
 
-        {/* TAB 3: ICT / SMC SETUP */}
+        {/* TAB 3: CONCEPTS & SETUP */}
         {activeTab === "ict" && (
           <div className="space-y-6">
             <h2 className="text-base font-bold text-[#38BDF8] border-b border-[#1E293B] pb-3">
-              ICT / Smart Money Concepts & Confluences
+              Concepts & Confluences
             </h2>
 
             <div>
               <label className="text-xs font-semibold text-[#94A3B8] block mb-1.5">Primary Setup Name</label>
-              <input
-                type="text"
-                placeholder="e.g. Liquidity Sweep + FVG Retracement"
+              <select
                 value={setup}
                 onChange={(e) => setSetup(e.target.value)}
                 className="w-full px-3.5 py-2.5 rounded-xl bg-[#050B14] border border-[#1E293B] text-xs text-white"
-              />
+              >
+                <option value="">Select a configured setup</option>
+                {configuration.setups.map((item: any) => <option key={item.id} value={item.name}>{item.name}</option>)}
+              </select>
             </div>
 
             {/* GC and EC Grid */}
@@ -1136,10 +1140,13 @@ export default function AddTradePage() {
 
             <div>
               <label className="text-xs font-semibold text-[#94A3B8] block mb-2.5">
-                Active ICT / SMC Confluences (Click to toggle)
+                Concepts (Click to toggle)
               </label>
               <div className="flex flex-wrap gap-2">
-                {ictOptions.map((opt) => {
+                {configuration.concepts.length === 0 ? (
+                  <p className="text-xs text-[#64748B]">No concepts configured. Add concepts in Settings.</p>
+                ) : configuration.concepts.map((concept: any) => {
+                  const opt = concept.name;
                   const isSelected = selectedIct.includes(opt);
                   return (
                     <button

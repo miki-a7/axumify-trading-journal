@@ -517,7 +517,7 @@ export default function TradeDetailsPage() {
         <div className="p-6 rounded-2xl bg-[#0B1220] border border-[#1E293B] space-y-4">
           <h3 className="text-sm font-bold text-[#38BDF8] uppercase tracking-wider flex items-center gap-2">
             <Layers className="w-4 h-4" />
-            ICT / SMC Confluence Tags
+            Concept Tags
           </h3>
           <div className="flex flex-wrap gap-2">
             {ictConcepts.length === 0 ? (

@@ -270,12 +270,12 @@ export default function PublicSharedTradePage() {
           </div>
         )}
 
-        {/* ICT SMC Concept Tags */}
+        {/* Concept Tags */}
         {trade.ictConcepts && trade.ictConcepts.length > 0 && (
           <div className="p-6 rounded-2xl bg-[#0B1220] border border-[#1E293B] space-y-3">
             <h3 className="text-xs font-bold text-[#38BDF8] uppercase tracking-wider flex items-center gap-2">
               <Layers className="w-4 h-4" />
-              ICT / SMC Tags
+              Concept Tags
             </h3>
             <div className="flex flex-wrap gap-2">
               {trade.ictConcepts.map((tag: string) => (

@@ -27,6 +27,10 @@ export async function POST(req: NextRequest) {
 
     const body = await req.json();
 
+    if (!body.text || typeof body.text !== "string") {
+      return NextResponse.json({ error: "Rule text is required" }, { status: 400 });
+    }
+
     const rule = await db.tradingRule.create({
       data: {
         userId: user.id,

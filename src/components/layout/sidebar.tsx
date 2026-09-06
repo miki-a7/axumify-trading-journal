@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -30,7 +30,12 @@ interface SidebarProps {
 
 export default function Sidebar({ isMobileOpen, setIsMobileOpen }: SidebarProps) {
   const [collapsed, setCollapsed] = useState(false);
+  const [profile, setProfile] = useState<{ name?: string | null; email?: string | null }>({});
   const pathname = usePathname();
+
+  useEffect(() => {
+    fetch("/api/profile", { cache: "no-store" }).then((res) => res.ok ? res.json() : null).then((data) => data?.user && setProfile(data.user)).catch(() => undefined);
+  }, []);
 
   const navigation = [
     { name: "Dashboard", href: "/", icon: LayoutDashboard },
@@ -145,10 +150,10 @@ export default function Sidebar({ isMobileOpen, setIsMobileOpen }: SidebarProps)
             </div>
             {(!collapsed || isMobileOpen) && (
               <div className="flex flex-col flex-1 overflow-hidden">
-                <span className="text-sm font-semibold text-white truncate">Oriyon Trades</span>
+                <span className="text-sm font-semibold text-white truncate">{profile.name || profile.email || "Trader"}</span>
                 <span className="text-xs text-[#22C55E] flex items-center gap-1 font-medium">
                   <span className="w-2 h-2 rounded-full bg-[#22C55E] animate-pulse" />
-                  Pro Trader
+                  Active account
                 </span>
               </div>
             )}

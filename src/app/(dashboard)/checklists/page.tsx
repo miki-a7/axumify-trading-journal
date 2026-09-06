@@ -11,6 +11,7 @@ export default function ChecklistsPage() {
   const [newChecklistTitle, setNewChecklistTitle] = useState("");
   const [newRuleText, setNewRuleText] = useState("");
   const [newRuleCategory, setNewRuleCategory] = useState("RISK");
+  const [newItemText, setNewItemText] = useState<Record<string, string>>({});
 
   const fetchData = async () => {
     try {
@@ -62,11 +63,7 @@ export default function ChecklistsPage() {
         body: JSON.stringify({
           title: newChecklistTitle.trim(),
           category: "PRE_MARKET",
-          items: [
-            "Review market bias & HTF key levels",
-            "Check high-impact economic news calendar",
-            "Verify risk limit and position size calculation",
-          ],
+          items: [],
         }),
       });
       if (res.ok) {
@@ -96,6 +93,14 @@ export default function ChecklistsPage() {
     } catch (err) {
       console.error(err);
     }
+  };
+
+  const addChecklistItem = async (checklistId: string) => {
+    const text = newItemText[checklistId]?.trim();
+    if (!text) return;
+    await fetch("/api/checklists", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ checklistId, itemText: text }) });
+    setNewItemText((current) => ({ ...current, [checklistId]: "" }));
+    fetchData();
   };
 
   const addRule = async (e: React.FormEvent) => {
@@ -212,6 +217,10 @@ export default function ChecklistsPage() {
                     </button>
                   </div>
                 ))}
+              </div>
+              <div className="flex gap-2">
+                <input value={newItemText[cl.id] || ""} onChange={(e) => setNewItemText((current) => ({ ...current, [cl.id]: e.target.value }))} placeholder="Add checklist item" className="flex-1 px-3 py-2 rounded-xl bg-[#0B1220] border border-[#1E293B] text-xs text-white" />
+                <button type="button" onClick={() => addChecklistItem(cl.id)} className="px-3 py-2 rounded-xl bg-[#2563EB] text-white text-xs font-bold">Add item</button>
               </div>
             </div>
           ))}

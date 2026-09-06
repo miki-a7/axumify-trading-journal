@@ -1,19 +1,57 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Settings, Save, Shield, User, Globe, HardDrive } from "lucide-react";
 
 export default function SettingsPage() {
-  const [name, setName] = useState("Oriyon Trades");
-  const [email, setEmail] = useState("trader@axumify.com");
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
   const [timezone, setTimezone] = useState("UTC-3");
   const [currency, setCurrency] = useState("USD");
   const [saved, setSaved] = useState(false);
+  const [configuration, setConfiguration] = useState<any>({ systems: [], setups: [], concepts: [], entryModels: [], sessions: [], instruments: [], tags: [] });
+  const [newConfig, setNewConfig] = useState({ type: "system", name: "", market: "CUSTOM" });
+
+  const loadConfiguration = async () => {
+    const response = await fetch("/api/configuration", { cache: "no-store" });
+    if (response.ok) setConfiguration(await response.json());
+  };
+
+  useEffect(() => { loadConfiguration().catch(() => undefined); }, []);
+  useEffect(() => {
+    fetch("/api/profile", { cache: "no-store" }).then((res) => res.ok ? res.json() : null).then((data) => {
+      if (!data?.user) return;
+      setName(data.user.name || "");
+      setEmail(data.user.email || "");
+      setTimezone(data.user.timezone || "UTC");
+      setCurrency(data.user.currency || "USD");
+    }).catch(() => undefined);
+  }, []);
+
+  const addConfiguration = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!newConfig.name.trim()) return;
+    const response = await fetch("/api/configuration", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(newConfig),
+    });
+    if (response.ok) {
+      setNewConfig((current) => ({ ...current, name: "" }));
+      loadConfiguration();
+    }
+  };
+
+  const deleteConfiguration = async (type: string, id: string) => {
+    await fetch(`/api/configuration?type=${type}&id=${id}`, { method: "DELETE" });
+    loadConfiguration();
+  };
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
-    setSaved(true);
-    setTimeout(() => setSaved(false), 3000);
+    fetch("/api/profile", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name, timezone, currency }) })
+      .then(() => { setSaved(true); setTimeout(() => setSaved(false), 3000); })
+      .catch(() => undefined);
   };
 
   return (
@@ -25,11 +63,45 @@ export default function SettingsPage() {
           <div>
             <h1 className="text-2xl font-extrabold text-white">Terminal Settings</h1>
             <p className="text-xs text-[#94A3B8]">
-              Manage user profile, preferences, database seed status, and export settings
+              Manage your profile, preferences, and trading configuration
             </p>
           </div>
         </div>
       </div>
+
+      <section className="p-6 rounded-2xl bg-[#0B1220] border border-[#1E293B] space-y-4">
+        <div>
+          <h2 className="text-sm font-bold text-[#38BDF8] uppercase tracking-wider">My Trading Configuration</h2>
+          <p className="text-xs text-[#94A3B8] mt-1">Create your own systems, concepts, entry models, sessions, instruments, and tags. Nothing is added automatically.</p>
+        </div>
+        <form onSubmit={addConfiguration} className="grid grid-cols-1 sm:grid-cols-[180px_1fr_auto] gap-2">
+          <select value={newConfig.type} onChange={(e) => setNewConfig({ ...newConfig, type: e.target.value })} className="px-3 py-2 rounded-xl bg-[#050B14] border border-[#1E293B] text-xs text-white">
+            <option value="system">Trading system</option>
+            <option value="setup">Setup</option>
+            <option value="concept">Concept</option>
+            <option value="entryModel">Entry model</option>
+            <option value="session">Session</option>
+            <option value="instrument">Instrument</option>
+            <option value="tag">Tag</option>
+          </select>
+          <input value={newConfig.name} onChange={(e) => setNewConfig({ ...newConfig, name: e.target.value })} placeholder="Name" className="px-3 py-2 rounded-xl bg-[#050B14] border border-[#1E293B] text-xs text-white" />
+          <button type="submit" className="px-4 py-2 rounded-xl bg-[#2563EB] text-white text-xs font-bold">Add</button>
+        </form>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          {(["systems", "setups", "concepts", "entryModels", "sessions", "instruments", "tags"] as const).map((key) => (
+            <div key={key} className="p-3 rounded-xl bg-[#050B14] border border-[#1E293B]">
+              <h3 className="text-xs font-bold text-white capitalize mb-2">{key === "entryModels" ? "Entry models" : key}</h3>
+              {configuration[key].length === 0 ? <p className="text-[11px] text-[#64748B]">Empty</p> : configuration[key].map((item: any) => (
+                <div key={item.id} className="flex items-center justify-between gap-2 py-1 text-xs text-[#CBD5E1]">
+                  <span>{item.name || item.symbol}</span>
+                  <button type="button" onClick={() => deleteConfiguration(key === "systems" ? "system" : key === "entryModels" ? "entryModel" : key.slice(0, -1), item.id)} className="text-[#EF4444]">Remove</button>
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
+        <button type="button" onClick={async () => { await fetch("/api/configuration", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "starter-ict" }) }); loadConfiguration(); }} className="text-xs text-[#38BDF8] hover:underline">Add optional ICT starter system</button>
+      </section>
 
       <form onSubmit={handleSave} className="p-6 rounded-2xl bg-[#0B1220] border border-[#1E293B] space-y-6">
         <h2 className="text-sm font-bold text-[#38BDF8] uppercase tracking-wider border-b border-[#1E293B] pb-3">
@@ -92,7 +164,7 @@ export default function SettingsPage() {
             <h3 className="text-xs font-bold text-white">Prisma Database & Multi-Tenant Engine</h3>
           </div>
           <p className="text-[11px] text-[#94A3B8]">
-            Database backend connected to SQLite (`dev.db`). Real CRUD operations enabled with strict multi-tenant `userId` data isolation.
+            Database backend connected to Supabase PostgreSQL. Configuration and trading data are isolated by authenticated user.
           </p>
         </div>
 

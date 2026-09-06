@@ -26,6 +26,13 @@ model User {
   tradingRules   TradingRule[]
   propAccounts   PropAccount[]
   goals          Goal[]
+  tradingSystems TradingSystem[]
+  setups         TradingSetup[]
+  concepts       TradingConcept[]
+  entryModels    EntryModel[]
+  sessions       TradingSession[]
+  instruments    TradingInstrument[]
+  methodologyTags MethodologyTag[]
 }
 
 model Trade {
@@ -161,6 +168,8 @@ model Checklist {
   updatedAt DateTime @updatedAt
 
   items ChecklistItem[]
+  systemId String?
+  system   TradingSystem? @relation(fields: [systemId], references: [id], onDelete: SetNull)
 }
 
 model ChecklistItem {
@@ -179,7 +188,115 @@ model TradingRule {
   text      String
   category  String   @default("GENERAL") // RISK, EXECUTION, PSYCHOLOGY
   isActive  Boolean  @default(true)
+  systemId  String?
+  system    TradingSystem? @relation(fields: [systemId], references: [id], onDelete: SetNull)
   createdAt DateTime @default(now())
+}
+
+model TradingSystem {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name        String
+  description String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  setups      TradingSetup[]
+  concepts    TradingConcept[]
+  entryModels EntryModel[]
+  checklists  Checklist[]
+  rules       TradingRule[]
+
+  @@index([userId])
+}
+
+model TradingSetup {
+  id               String   @id @default(cuid())
+  userId           String
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  systemId         String?
+  system           TradingSystem? @relation(fields: [systemId], references: [id], onDelete: SetNull)
+  name             String
+  description      String?
+  market           String?
+  timeframe        String?
+  entryConditions  String?
+  confirmation     String?
+  invalidation     String?
+  targetLogic      String?
+  checklistId      String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([userId])
+}
+
+model TradingConcept {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  systemId    String?
+  system      TradingSystem? @relation(fields: [systemId], references: [id], onDelete: SetNull)
+  name        String
+  description String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([userId])
+}
+
+model EntryModel {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  systemId    String?
+  system      TradingSystem? @relation(fields: [systemId], references: [id], onDelete: SetNull)
+  name        String
+  description String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([userId])
+}
+
+model TradingSession {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name      String
+  timezone  String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, name])
+}
+
+model TradingInstrument {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  symbol    String
+  market    String   @default("CUSTOM")
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, symbol])
+}
+
+model MethodologyTag {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name      String
+  createdAt DateTime @default(now())
+
+  @@unique([userId, name])
 }
 
 model PropAccount {

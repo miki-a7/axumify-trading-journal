@@ -4,8 +4,8 @@ import { db } from "../db";
 
 const fallbackUser = {
   id: "mock-user-1",
-  email: "trader@axumify.com",
-  name: "Oriyon Trades",
+  email: "dev@example.invalid",
+  name: "Development User",
   timezone: "UTC",
   currency: "USD",
 };
@@ -77,7 +77,7 @@ export async function getCurrentUser() {
       try {
         const defaultUser = await db.user.create({
           data: {
-            email: "trader@axumify.com",
+            email: "dev@example.invalid",
             name: "Dev Trader",
             timezone: "UTC",
             currency: "USD",

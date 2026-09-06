@@ -33,6 +33,37 @@ async function main() {
     create: { email: "isolation-b@axumify.test", name: "User B" },
   });
 
+  const systemA = await prisma.tradingSystem.create({
+    data: {
+      userId: userA.id,
+      name: "User A System",
+      setups: { create: [{ userId: userA.id, name: "User A Setup" }] },
+      concepts: { create: [{ userId: userA.id, name: "User A Concept" }] },
+    },
+    include: { setups: true, concepts: true },
+  });
+  const systemB = await prisma.tradingSystem.create({
+    data: {
+      userId: userB.id,
+      name: "User B System",
+      setups: { create: [{ userId: userB.id, name: "User B Setup" }] },
+      concepts: { create: [{ userId: userB.id, name: "User B Concept" }] },
+    },
+    include: { setups: true, concepts: true },
+  });
+
+  const aSystems = await prisma.tradingSystem.findMany({ where: { userId: userA.id }, include: { setups: true, concepts: true } });
+  const bSystems = await prisma.tradingSystem.findMany({ where: { userId: userB.id }, include: { setups: true, concepts: true } });
+  assert(aSystems.length === 1 && aSystems[0].id === systemA.id, "User A only sees own trading system");
+  assert(bSystems.length === 1 && bSystems[0].id === systemB.id, "User B only sees own trading system");
+  assert(aSystems[0].setups.every((setup) => setup.userId === userA.id), "User A setup is owned by User A");
+  assert(bSystems[0].concepts.every((concept) => concept.userId === userB.id), "User B concept is owned by User B");
+
+  const checklistA = await prisma.checklist.create({ data: { userId: userA.id, title: "User A Checklist" } });
+  const checklistB = await prisma.checklist.create({ data: { userId: userB.id, title: "User B Checklist" } });
+  assert((await prisma.checklist.findMany({ where: { userId: userA.id } })).every((item) => item.id === checklistA.id), "User A only sees own checklist");
+  assert((await prisma.checklist.findMany({ where: { userId: userB.id } })).every((item) => item.id === checklistB.id), "User B only sees own checklist");
+
   const tradeA = await prisma.trade.create({
     data: {
       userId: userA.id,
@@ -88,6 +119,10 @@ async function main() {
 
   await prisma.trade.delete({ where: { id: tradeA.id } });
   await prisma.trade.delete({ where: { id: tradeB.id } });
+  await prisma.tradingSystem.delete({ where: { id: systemA.id } });
+  await prisma.tradingSystem.delete({ where: { id: systemB.id } });
+  await prisma.checklist.delete({ where: { id: checklistA.id } });
+  await prisma.checklist.delete({ where: { id: checklistB.id } });
   await prisma.user.delete({ where: { id: userA.id } });
   await prisma.user.delete({ where: { id: userB.id } });
 

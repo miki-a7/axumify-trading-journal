@@ -77,7 +77,7 @@ export default function LoginPage() {
               <input
                 type="email"
                 required
-                placeholder="trader@axumify.com"
+                placeholder="you@example.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-[#050B14] border border-[#1E293B] text-xs font-mono text-white focus:border-[#38BDF8] outline-none"

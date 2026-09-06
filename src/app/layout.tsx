@@ -13,9 +13,9 @@ const outfit = Outfit({
 });
 
 export const metadata: Metadata = {
-  title: "Axumify | Institutional ICT Trading Journal Terminal",
+  title: "Axumify | Trading Journal",
   description:
-    "Professional Blue + Black trading journal terminal for performance analytics, ICT/SMC setup tracking, trade planning, psychology, and backtesting.",
+    "A configurable multi-user trading journal for performance analytics, trade planning, psychology, and backtesting.",
   icons: {
     icon: "/logo.png",
     shortcut: "/logo.png",

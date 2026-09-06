@@ -26,8 +26,8 @@ export const tradeBaseSchema = z.object({
   date: z.string().min(1, "Date is required"),
   time: z.string().optional(),
   instrument: z.string().min(1, "Instrument is required (e.g. EURUSD, NAS100)"),
-  market: z.enum(["FOREX", "INDICES", "CRYPTO", "STOCKS", "COMMODITIES"]).default("FOREX"),
-  session: z.enum(["Asian", "London", "New York", "London Close", "Other"]).default("New York"),
+  market: z.string().min(1).default("CUSTOM"),
+  session: z.string().min(1, "Session is required"),
   direction: z.enum(["LONG", "SHORT"]).default("LONG"),
   timeframe: z.string().default("15m"),
 

@@ -27,6 +27,17 @@ export async function POST(req: NextRequest) {
 
     const body = await req.json();
 
+    if (body.checklistId && body.itemText) {
+      const checklist = await db.checklist.findFirst({ where: { id: body.checklistId, userId: user.id }, include: { items: true } });
+      if (!checklist) return NextResponse.json({ error: "Checklist not found" }, { status: 404 });
+      const item = await db.checklistItem.create({ data: { checklistId: checklist.id, text: String(body.itemText).trim(), order: checklist.items.length + 1 } });
+      return NextResponse.json({ item }, { status: 201 });
+    }
+
+    if (!body.title || typeof body.title !== "string") {
+      return NextResponse.json({ error: "Checklist title is required" }, { status: 400 });
+    }
+
     const checklist = await db.checklist.create({
       data: {
         userId: user.id,
@@ -55,7 +66,14 @@ export async function PUT(req: NextRequest) {
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const body = await req.json();
-    const { itemId, checked, text } = body;
+    const { id, itemId, checked, text, order, title } = body;
+
+    if (id && title) {
+      const checklist = await db.checklist.findFirst({ where: { id, userId: user.id } });
+      if (!checklist) return NextResponse.json({ error: "Checklist not found" }, { status: 404 });
+      const updatedChecklist = await db.checklist.update({ where: { id }, data: { title: String(title).trim() } });
+      return NextResponse.json({ checklist: updatedChecklist });
+    }
 
     if (!itemId) {
       return NextResponse.json({ error: "itemId is required" }, { status: 400 });
@@ -77,6 +95,7 @@ export async function PUT(req: NextRequest) {
       data: {
         ...(checked !== undefined && { checked }),
         ...(text !== undefined && { text }),
+        ...(order !== undefined && { order: Number(order) }),
       },
     });
 

@@ -30,16 +30,17 @@ export default function BacktestPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Form states
-  const [instrument, setInstrument] = useState("EURUSD");
-  const [session, setSession] = useState("New York");
-  const [setup, setSetup] = useState("ICT FVG Retracement");
+  const [instrument, setInstrument] = useState("");
+  const [session, setSession] = useState("");
+  const [setup, setSetup] = useState("");
   const [direction, setDirection] = useState<"LONG" | "SHORT">("LONG");
-  const [entryPrice, setEntryPrice] = useState<number | "">(1.085);
-  const [stopLoss, setStopLoss] = useState<number | "">(1.0835);
-  const [takeProfit, setTakeProfit] = useState<number | "">(1.0895);
+  const [entryPrice, setEntryPrice] = useState<number | "">("");
+  const [stopLoss, setStopLoss] = useState<number | "">("");
+  const [takeProfit, setTakeProfit] = useState<number | "">("");
   const [result, setResult] = useState<"WIN" | "LOSS" | "BREAKEVEN">("WIN");
   const [notes, setNotes] = useState("");
   const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [configuration, setConfiguration] = useState<any>({ setups: [], sessions: [] });
 
   // OCR state
   const [ocrLoading, setOcrLoading] = useState(false);
@@ -78,6 +79,7 @@ export default function BacktestPage() {
 
   useEffect(() => {
     fetchBacktests();
+    fetch("/api/configuration", { cache: "no-store" }).then((res) => res.ok ? res.json() : null).then((data) => data && setConfiguration(data)).catch(() => undefined);
   }, []);
 
   const handleFileUpload = async (file: File) => {
@@ -426,9 +428,8 @@ export default function BacktestPage() {
                     onChange={(e) => setSession(e.target.value)}
                     className="w-full px-3 py-2 rounded-xl bg-[#050B14] border border-[#1E293B] text-xs text-white"
                   >
-                    <option value="Asian">Asian</option>
-                    <option value="London">London</option>
-                    <option value="New York">New York</option>
+                    <option value="">Select a configured session</option>
+                    {configuration.sessions.map((item: any) => <option key={item.id} value={item.name}>{item.name}</option>)}
                   </select>
                 </div>
               </div>
@@ -464,13 +465,14 @@ export default function BacktestPage() {
 
                 <div>
                   <label className="text-xs text-[#94A3B8] block mb-1 font-semibold">Setup / Strategy</label>
-                  <input
-                    type="text"
+                  <select
                     value={setup}
                     onChange={(e) => setSetup(e.target.value)}
                     className="w-full px-3 py-2 rounded-xl bg-[#050B14] border border-[#1E293B] text-xs text-white"
-                    placeholder="e.g. ICT FVG Retracement"
-                  />
+                  >
+                    <option value="">Select a configured setup</option>
+                    {configuration.setups.map((item: any) => <option key={item.id} value={item.name}>{item.name}</option>)}
+                  </select>
                 </div>
               </div>
 

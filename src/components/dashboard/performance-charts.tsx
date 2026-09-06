@@ -209,7 +209,7 @@ export default function PerformanceCharts({
       {/* Setup Performance Bar Chart */}
       <div className="p-6 rounded-2xl bg-[#0B1220] border border-[#1E293B] shadow-card">
         <h3 className="text-base font-bold text-white mb-1">Performance by Setup</h3>
-        <p className="text-xs text-[#94A3B8] mb-4">Total R-Multiple returned by ICT setups</p>
+        <p className="text-xs text-[#94A3B8] mb-4">Total R-Multiple returned by your setups</p>
 
         <div className="h-56 w-full">
           {setupBreakdown.length === 0 ? (
