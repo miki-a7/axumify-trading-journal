@@ -1,3 +1,5 @@
+export * from "./dates";
+
 export interface TradeData {
   id: string;
   date: Date | string;
@@ -11,7 +13,7 @@ export interface TradeData {
   exitPrice?: number | null;
   positionSize?: number | null;
   riskAmount?: number | null;
-  plannedRR?: number | null;
+  possibleRR?: number | null;
   actualR: number;
   pnl: number;
   result: string; // WIN, LOSS, BREAKEVEN
@@ -190,7 +192,7 @@ export function calculateTradingStats(trades: TradeData[]): CalculatedStats {
 
   sorted.forEach((trade) => {
     const pnl = Number(trade.pnl || 0);
-    const r = Number(trade.actualR || 0);
+    const r = getSignedR(Number(trade.actualR || 0), trade.result);
     const res = trade.result ? trade.result.toUpperCase() : (pnl > 0 ? "WIN" : pnl < 0 ? "LOSS" : "BREAKEVEN");
 
     totalR += r;
@@ -339,7 +341,7 @@ export function generateEquityCurve(trades: TradeData[]) {
 
   sorted.forEach((trade, index) => {
     const pnlVal = Number(trade.pnl || 0);
-    const rVal = Number(trade.actualR || 0);
+    const rVal = getSignedR(Number(trade.actualR || 0), trade.result);
     currentCumPnl += pnlVal;
     currentCumR += rVal;
     const formattedDate = new Date(trade.date).toLocaleDateString("en-US", {
@@ -361,11 +363,221 @@ export function generateEquityCurve(trades: TradeData[]) {
 }
 
 /**
- * Get ISO Week string helper (e.g. 2026-W34)
+ * Safe UTC Date String extractor (YYYY-MM-DD)
+ */
+export function getUTCDateString(dateInput: Date | string): string {
+  if (typeof dateInput === "string" && /^\d{4}-\d{2}-\d{2}/.test(dateInput)) {
+    return dateInput.substring(0, 10);
+  }
+  const d = new Date(dateInput);
+  if (isNaN(d.getTime())) {
+    return new Date().toISOString().substring(0, 10);
+  }
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
+}
+
+
+
+/**
+ * Single Trade Metrics Calculation
+ * Actual R is entered/stored as a positive magnitude.
+ * WIN: Actual R = +Magnitude, P&L = +Risk * Magnitude
+ * LOSS: Actual R = -1.00R, P&L = -Risk
+ * BREAKEVEN: Actual R = 0.00R, P&L = $0.00
+ */
+export function calculateSingleTradeMetrics(input: {
+  direction?: string | null;
+  entryPrice?: number | null;
+  stopLoss?: number | null;
+  takeProfit?: number | null;
+  exitPrice?: number | null;
+  plannedRR?: number | null;
+  possibleRR?: number | null;
+  actualR?: number | null;
+  pnl?: number | null;
+  riskAmount?: number | null;
+  result?: string | null;
+}): {
+  /** Stored in DB for backward compat. Always equals actualR magnitude. Not shown to user as "Planned R:R". */
+  plannedRR: number;
+  actualR: number;
+  pnl: number;
+  result: string;
+} {
+  const dir = (input.direction || "LONG").toUpperCase();
+  const riskAmt =
+    input.riskAmount !== undefined && input.riskAmount !== null && !isNaN(Number(input.riskAmount))
+      ? Number(input.riskAmount)
+      : 300.0;
+
+  const entry =
+    input.entryPrice !== undefined && input.entryPrice !== null && !isNaN(Number(input.entryPrice))
+      ? Number(input.entryPrice)
+      : null;
+  const sl =
+    input.stopLoss !== undefined && input.stopLoss !== null && !isNaN(Number(input.stopLoss))
+      ? Number(input.stopLoss)
+      : null;
+  const tp =
+    input.takeProfit !== undefined && input.takeProfit !== null && !isNaN(Number(input.takeProfit))
+      ? Number(input.takeProfit)
+      : null;
+
+  // 1. Calculate R:R magnitude — user input takes precedence, then price-derived
+  let rrMagnitude = 2.0;
+  if (
+    input.actualR !== undefined &&
+    input.actualR !== null &&
+    !isNaN(Number(input.actualR)) &&
+    Number(input.actualR) > 0
+  ) {
+    rrMagnitude = Number(Math.abs(Number(input.actualR)).toFixed(2));
+  } else if (
+    input.plannedRR !== undefined &&
+    input.plannedRR !== null &&
+    !isNaN(Number(input.plannedRR)) &&
+    Number(input.plannedRR) > 0
+  ) {
+    rrMagnitude = Number(Number(input.plannedRR).toFixed(2));
+  } else if (entry !== null && sl !== null && tp !== null) {
+    let riskDistance = 0;
+    let rewardDistance = 0;
+    if (dir === "LONG") {
+      riskDistance = Math.abs(entry - sl);
+      rewardDistance = Math.abs(tp - entry);
+    } else {
+      riskDistance = Math.abs(sl - entry);
+      rewardDistance = Math.abs(entry - tp);
+    }
+    if (riskDistance > 0 && rewardDistance > 0) {
+      rrMagnitude = Number((rewardDistance / riskDistance).toFixed(2));
+    }
+  }
+
+  // 2. Determine Outcome: WIN, LOSS, BREAKEVEN
+  let result = (input.result || "WIN").toUpperCase();
+  if (result !== "WIN" && result !== "LOSS" && result !== "BREAKEVEN") {
+    result = "WIN";
+  }
+
+  let actualR: number;
+  let pnl: number;
+
+  if (result === "BREAKEVEN") {
+    actualR = 0.0;
+    pnl = 0.0;
+    result = "BREAKEVEN";
+  } else if (result === "WIN") {
+    actualR = rrMagnitude;
+    pnl = Number((riskAmt * rrMagnitude).toFixed(2));
+  } else if (result === "LOSS") {
+    actualR = -1.0;
+    pnl = Number((-riskAmt).toFixed(2));
+  } else {
+    actualR = 0.0;
+    pnl = 0.0;
+    result = "BREAKEVEN";
+  }
+
+  return {
+    plannedRR: rrMagnitude,
+    actualR,
+    pnl,
+    result,
+  };
+}
+
+/**
+ * Signed R for analytics and performance views.
+ * WIN -> +rrMagnitude
+ * LOSS -> -1.0R (standard stopped-out loss)
+ * BREAKEVEN -> 0.0R
+ */
+export function getSignedR(actualRMagnitude: number, result?: string | null): number {
+  const res = (result || "").toUpperCase();
+  if (res === "WIN") return Math.abs(Number(actualRMagnitude || 0));
+  if (res === "LOSS") return -1.0;
+  return 0;
+}
+
+/** Compute P&L from positive RR magnitude and outcome. */
+export function computePnlFromResult(
+  riskAmount: number,
+  rrMagnitude: number,
+  result?: string | null
+): number {
+  const risk = Number(riskAmount) || 0;
+  const rr = Math.abs(Number(rrMagnitude) || 0);
+  const res = (result || "WIN").toUpperCase();
+  if (res === "BREAKEVEN") return 0;
+  if (res === "LOSS") return Number((-risk).toFixed(2));
+  if (res === "WIN") return Number((risk * rr).toFixed(2));
+  return 0;
+}
+
+/** Resolve positive RR magnitude from explicit actualR or plannedRR (defaults to 1R). */
+export function resolveRRMagnitude(
+  actualR?: number | null,
+  plannedRR?: number | null
+): number {
+  if (actualR !== undefined && actualR !== null && !isNaN(Number(actualR))) {
+    const mag = Math.abs(Number(actualR));
+    if (mag > 0) return Number(mag.toFixed(2));
+  }
+  if (plannedRR !== undefined && plannedRR !== null && !isNaN(Number(plannedRR)) && Number(plannedRR) > 0) {
+    return Number(Math.abs(Number(plannedRR)).toFixed(2));
+  }
+  return 1.0;
+}
+
+/** Display RR magnitude without sign (5.00R). */
+export function formatRRMagnitude(value: number | null | undefined): string {
+  if (value === null || value === undefined || isNaN(Number(value))) return "—";
+  return `${Math.abs(Number(value)).toFixed(2)}R`;
+}
+
+/** Display monetary P&L with a single $ (+$500, -$500, $0). */
+export function formatPnlDisplay(pnl: number | null | undefined): string {
+  if (pnl === null || pnl === undefined || isNaN(Number(pnl))) return "—";
+  const n = Number(pnl);
+  if (n > 0) return `+$${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  if (n < 0) return `-$${Math.abs(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  return "$0.00";
+}
+
+/** Signed R for performance views (+5.00R / -1.00R / 0.00R) derived from magnitude + result. */
+export function formatSignedRDisplay(
+  actualRMagnitude: number | null | undefined,
+  result?: string | null
+): string {
+  if (actualRMagnitude === null || actualRMagnitude === undefined || isNaN(Number(actualRMagnitude))) {
+    return "—";
+  }
+  const signed = getSignedR(Number(actualRMagnitude), result);
+  const fixed = Math.abs(signed).toFixed(2);
+  if (signed > 0) return `+${fixed}R`;
+  if (signed < 0) return `-${fixed}R`;
+  return `${fixed}R`;
+}
+
+export function formatRDisplay(value: number | null | undefined, result?: string | null): string {
+  if (result !== undefined) return formatSignedRDisplay(value, result);
+  return formatRRMagnitude(value);
+}
+
+/** Format optional price for display. */
+export function formatPriceDisplay(value: number | null | undefined): string {
+  if (value === null || value === undefined || isNaN(Number(value))) return "—";
+  return String(value);
+}
+
+/**
+ * Get ISO Week string helper (e.g. 2026-W34) using UTC
  */
 export function getISOWeekKey(dateInput: Date | string): string {
-  const date = new Date(dateInput);
-  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  const dateStr = getUTCDateString(dateInput);
+  const parts = dateStr.split("-").map(Number);
+  const d = new Date(Date.UTC(parts[0], parts[1] - 1, parts[2]));
   const dayNum = d.getUTCDay() || 7;
   d.setUTCDate(d.getUTCDate() + 4 - dayNum);
   const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
@@ -383,11 +595,11 @@ export function calculateTimePeriodRollups(trades: TradeData[]) {
   const yearlyMap: Record<string, TradeData[]> = {};
 
   trades.forEach((t) => {
-    const d = new Date(t.date);
-    const dateStr = d.toISOString().split("T")[0]; // YYYY-MM-DD
-    const weekStr = getISOWeekKey(d); // YYYY-W##
-    const monthStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`; // YYYY-MM
-    const yearStr = `${d.getFullYear()}`; // YYYY
+    const dateStr = getUTCDateString(t.date);
+    const parts = dateStr.split("-");
+    const yearStr = parts[0];
+    const monthStr = `${parts[0]}-${parts[1]}`;
+    const weekStr = getISOWeekKey(t.date);
 
     if (!dailyMap[dateStr]) dailyMap[dateStr] = [];
     if (!weeklyMap[weekStr]) weeklyMap[weekStr] = [];
@@ -411,7 +623,7 @@ export function calculateTimePeriodRollups(trades: TradeData[]) {
 
       groupTrades.forEach((t) => {
         const pnl = Number(t.pnl || 0);
-        const r = Number(t.actualR || 0);
+        const r = getSignedR(Number(t.actualR || 0), t.result);
         if (pnl > bestPnl) bestPnl = pnl;
         if (pnl < worstPnl) worstPnl = pnl;
         if (r > bestR) bestR = r;
@@ -455,3 +667,4 @@ export function calculateTimePeriodRollups(trades: TradeData[]) {
     yearly: buildRollup(yearlyMap, "Year"),
   };
 }
+

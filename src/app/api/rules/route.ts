@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
 
+export const dynamic = "force-dynamic";
+
 export async function GET() {
   try {
     const user = await getCurrentUser();
@@ -48,6 +50,13 @@ export async function PUT(req: NextRequest) {
     const body = await req.json();
     const { id, isActive, text } = body;
 
+    if (!id) return NextResponse.json({ error: "Missing ID" }, { status: 400 });
+
+    const existing = await db.tradingRule.findFirst({
+      where: { id, userId: user.id },
+    });
+    if (!existing) return NextResponse.json({ error: "Rule not found" }, { status: 404 });
+
     const rule = await db.tradingRule.update({
       where: { id },
       data: {
@@ -72,7 +81,14 @@ export async function DELETE(req: NextRequest) {
 
     if (!id) return NextResponse.json({ error: "Missing ID" }, { status: 400 });
 
-    await db.tradingRule.delete({ where: { id } });
+    const existing = await db.tradingRule.findFirst({
+      where: { id, userId: user.id },
+    });
+    if (!existing) return NextResponse.json({ error: "Rule not found" }, { status: 404 });
+
+    await db.tradingRule.deleteMany({
+      where: { id, userId: user.id },
+    });
     return NextResponse.json({ success: true });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });

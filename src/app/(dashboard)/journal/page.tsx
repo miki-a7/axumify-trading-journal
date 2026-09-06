@@ -3,19 +3,24 @@
 import React, { useEffect, useState } from "react";
 import TradeTable, { TradeItem } from "@/components/journal/trade-table";
 import Link from "next/link";
-import { Plus, RefreshCw, BookOpen, Download } from "lucide-react";
+import { Plus, RefreshCw, BookOpen, Download, Calendar } from "lucide-react";
+import { CalendarMode } from "@/lib/calculations/dates";
 
 export default function JournalPage() {
   const [trades, setTrades] = useState<TradeItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [calendarMode, setCalendarMode] = useState<CalendarMode>("GC");
 
   const fetchTrades = async () => {
     try {
       setLoading(true);
-      const res = await fetch("/api/trades");
+      const res = await fetch("/api/trades", { cache: "no-store" });
       if (res.ok) {
         const json = await res.json();
         setTrades(json.trades || []);
+      } else {
+        const errJson = await res.json().catch(() => ({}));
+        console.error("Failed to load trades:", errJson.error);
       }
     } catch (err) {
       console.error("Failed to load trades:", err);
@@ -33,10 +38,13 @@ export default function JournalPage() {
     try {
       const res = await fetch(`/api/trades/${id}`, { method: "DELETE" });
       if (res.ok) {
-        setTrades(trades.filter((t) => t.id !== id));
+        setTrades((prev) => prev.filter((t) => t.id !== id));
+      } else {
+        const json = await res.json().catch(() => ({}));
+        alert(json.error || "Failed to delete trade.");
       }
-    } catch (err) {
-      alert("Failed to delete trade.");
+    } catch (err: any) {
+      alert(err.message || "Failed to delete trade.");
     }
   };
 
@@ -47,14 +55,40 @@ export default function JournalPage() {
         <div>
           <div className="flex items-center gap-2">
             <BookOpen className="w-6 h-6 text-[#38BDF8]" />
-            <h1 className="text-2xl font-extrabold text-white">Trade Journal Log</h1>
+            <h1 className="text-2xl font-extrabold text-white">
+              {calendarMode === "EC" ? "EC Trade Journal Log" : "Trade Journal Log"}
+            </h1>
           </div>
           <p className="text-xs text-[#94A3B8] mt-1">
-            Complete database history with advanced multi-parameter search & filters
+            Complete database history with advanced multi-parameter search & filters ({calendarMode === "EC" ? "Ethiopian Calendar (EC)" : "Gregorian Calendar (GC)"})
           </p>
         </div>
 
         <div className="flex items-center gap-3">
+          {/* GC / EC Mode Toggle */}
+          <div className="flex items-center p-1 rounded-xl bg-[#050B14] border border-[#1E293B]">
+            <button
+              onClick={() => setCalendarMode("GC")}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
+                calendarMode === "GC"
+                  ? "bg-[#2563EB] text-white shadow-glow"
+                  : "text-[#94A3B8] hover:text-white"
+              }`}
+            >
+              GC
+            </button>
+            <button
+              onClick={() => setCalendarMode("EC")}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
+                calendarMode === "EC"
+                  ? "bg-[#2563EB] text-white shadow-glow"
+                  : "text-[#94A3B8] hover:text-white"
+              }`}
+            >
+              EC (ኢትዮጵያ)
+            </button>
+          </div>
+
           <button
             onClick={fetchTrades}
             className="p-2.5 rounded-xl bg-[#050B14] border border-[#1E293B] text-[#94A3B8] hover:text-white"
@@ -86,7 +120,7 @@ export default function JournalPage() {
           <RefreshCw className="w-8 h-8 text-[#38BDF8] animate-spin" />
         </div>
       ) : (
-        <TradeTable trades={trades} onDelete={handleDelete} />
+        <TradeTable trades={trades} onDelete={handleDelete} calendarMode={calendarMode} />
       )}
     </div>
   );

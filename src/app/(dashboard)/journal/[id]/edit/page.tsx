@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useState, useRef, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import React, { useState, useEffect, useRef } from "react";
+import { useRouter, useParams } from "next/navigation";
 import {
   BookOpen,
   DollarSign,
@@ -25,7 +25,7 @@ import {
   RefreshCw,
 } from "lucide-react";
 import type { TradeImageFormItem } from "@/lib/images/trade-image";
-import { formImagesForApi, getImagePreviewSrc } from "@/lib/images/trade-image";
+import { apiImageToFormItem, formImagesForApi, getImagePreviewSrc } from "@/lib/images/trade-image";
 import {
   type OCRDetectedData,
   processScreenshotFile,
@@ -40,10 +40,13 @@ import {
   formatSignedRDisplay,
 } from "@/lib/calculations/stats";
 
-export default function AddTradePage() {
+export default function EditTradePage() {
   const router = useRouter();
+  const params = useParams();
+  const id = (params?.id as string) || "";
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [activeTab, setActiveTab] = useState<"general" | "plan" | "ict" | "psych" | "images">("general");
+  const [loadingTrade, setLoadingTrade] = useState(true);
 
   // Core Form State
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
@@ -95,19 +98,19 @@ export default function AddTradePage() {
   const [selectedIct, setSelectedIct] = useState<string[]>(["Liquidity sweep", "MSS", "FVG"]);
   const [setup, setSetup] = useState("Liquidity Sweep + FVG Retracement");
 
-  // General Confluence (HTF) & Execution Confluence (LTF)
+  // Confluences
   const [gc, setGc] = useState("");
   const [ec, setEc] = useState("");
 
   // Trade Plan
-  const [htfBias, setHtfBias] = useState("Bullish");
-  const [marketCondition, setMarketCondition] = useState("Trending");
-  const [liquidityTarget, setLiquidityTarget] = useState("Previous Day High");
-  const [entryModel, setEntryModel] = useState("15m FVG Retracement");
-  const [confirmation, setConfirmation] = useState("1m MSS + Displacement");
-  const [invalidation, setInvalidation] = useState("Below Asian Low");
-  const [targetReason, setTargetReason] = useState("Unfilled liquidity gap above Asia High");
-  const [reasonForEntry, setReasonForEntry] = useState("Asian low swept cleanly at NY open with sharp displacement.");
+  const [htfBias, setHtfBias] = useState("");
+  const [marketCondition, setMarketCondition] = useState("");
+  const [liquidityTarget, setLiquidityTarget] = useState("");
+  const [entryModel, setEntryModel] = useState("");
+  const [confirmation, setConfirmation] = useState("");
+  const [invalidation, setInvalidation] = useState("");
+  const [targetReason, setTargetReason] = useState("");
+  const [reasonForEntry, setReasonForEntry] = useState("");
 
   // Psychology Ratings (1-5)
   const [psychConfidence, setPsychConfidence] = useState(5);
@@ -119,9 +122,9 @@ export default function AddTradePage() {
   const [psychDiscipline, setPsychDiscipline] = useState(5);
   const [psychStress, setPsychStress] = useState(1);
 
-  const [emotionBefore, setEmotionBefore] = useState("Calm & Focused");
-  const [emotionDuring, setEmotionDuring] = useState("Patient");
-  const [emotionAfter, setEmotionAfter] = useState("Confident");
+  const [emotionBefore, setEmotionBefore] = useState("");
+  const [emotionDuring, setEmotionDuring] = useState("");
+  const [emotionAfter, setEmotionAfter] = useState("");
   const [followedPlan, setFollowedPlan] = useState(true);
   const [brokeRule, setBrokeRule] = useState(false);
   const [enteredTooEarly, setEnteredTooEarly] = useState(false);
@@ -130,7 +133,7 @@ export default function AddTradePage() {
   const [overtraded, setOvertraded] = useState(false);
 
   const [mistakesInput, setMistakesInput] = useState("");
-  const [positivesInput, setPositivesInput] = useState("Clean execution following standard entry model.");
+  const [positivesInput, setPositivesInput] = useState("");
   const [notes, setNotes] = useState("");
 
   // Execution & Performance Metrics
@@ -140,6 +143,125 @@ export default function AddTradePage() {
   const [fees, setFees] = useState<number | "">("");
   const [swap, setSwap] = useState<number | "">("");
   const [slippage, setSlippage] = useState<number | "">("");
+
+  const [submitting, setSubmitting] = useState(false);
+
+  // Fetch Existing Trade Data
+  useEffect(() => {
+    if (!id) return;
+    async function fetchTrade() {
+      try {
+        const res = await fetch(`/api/trades/${id}`, { cache: "no-store" });
+        if (!res.ok) throw new Error("Trade not found");
+        const json = await res.json();
+        const t = json.trade;
+
+        if (t.date) setDate(new Date(t.date).toISOString().split("T")[0]);
+        if (t.instrument) setInstrument(t.instrument);
+        if (t.market) setMarket(t.market);
+        if (t.session) setSession(t.session);
+        if (t.direction) setDirection(t.direction);
+        if (t.timeframe) setTimeframe(t.timeframe);
+
+        if (t.entryPrice !== null && t.entryPrice !== undefined) {
+          setEntryPrice(Number(t.entryPrice));
+          setShowAdvancedLevels(true);
+        }
+        if (t.stopLoss !== null && t.stopLoss !== undefined) {
+          setStopLoss(Number(t.stopLoss));
+          setShowAdvancedLevels(true);
+        }
+        if (t.takeProfit !== null && t.takeProfit !== undefined) {
+          setTakeProfit(Number(t.takeProfit));
+          setShowAdvancedLevels(true);
+        }
+        if (t.exitPrice !== null && t.exitPrice !== undefined) {
+          setExitPrice(Number(t.exitPrice));
+          setShowAdvancedLevels(true);
+        }
+        if (t.positionSize !== null && t.positionSize !== undefined) setPositionSize(Number(t.positionSize));
+        if (t.riskAmount !== null && t.riskAmount !== undefined) setRiskAmount(Number(t.riskAmount));
+        if (t.riskPercentage !== null && t.riskPercentage !== undefined) setRiskPercentage(Number(t.riskPercentage));
+        // Load actualR magnitude (always positive in DB) into the input
+        if (t.actualR !== null && t.actualR !== undefined && Number(t.actualR) > 0) setActualRRInput(Number(t.actualR));
+        else if (t.plannedRR !== null && t.plannedRR !== undefined) setActualRRInput(Number(t.plannedRR));
+        if (t.possibleRR !== null && t.possibleRR !== undefined) setPossibleRR(Number(t.possibleRR));
+        if (t.result) setResult(t.result);
+        if (t.grade) setGrade(t.grade);
+
+        if (t.mae !== null && t.mae !== undefined) setMae(Number(t.mae));
+        if (t.mfe !== null && t.mfe !== undefined) setMfe(Number(t.mfe));
+        if (t.commission !== null && t.commission !== undefined) setCommission(Number(t.commission));
+        if (t.fees !== null && t.fees !== undefined) setFees(Number(t.fees));
+        if (t.swap !== null && t.swap !== undefined) setSwap(Number(t.swap));
+        if (t.slippage !== null && t.slippage !== undefined) setSlippage(Number(t.slippage));
+
+        try {
+          if (t.ictConcepts) setSelectedIct(typeof t.ictConcepts === "string" ? JSON.parse(t.ictConcepts) : t.ictConcepts);
+        } catch (e) {}
+
+        if (t.setup) setSetup(t.setup);
+        if (t.htfBias) setHtfBias(t.htfBias);
+        if (t.marketCondition) setMarketCondition(t.marketCondition);
+        if (t.liquidityTarget) setLiquidityTarget(t.liquidityTarget);
+        if (t.entryModel) setEntryModel(t.entryModel);
+        if (t.confirmation) setConfirmation(t.confirmation);
+        if (t.invalidation) setInvalidation(t.invalidation);
+        if (t.targetReason) setTargetReason(t.targetReason);
+        if (t.reasonForEntry) setReasonForEntry(t.reasonForEntry);
+
+        if (t.psychConfidence !== null && t.psychConfidence !== undefined) setPsychConfidence(Number(t.psychConfidence));
+        if (t.psychPatience !== null && t.psychPatience !== undefined) setPsychPatience(Number(t.psychPatience));
+        if (t.psychFear !== null && t.psychFear !== undefined) setPsychFear(Number(t.psychFear));
+        if (t.psychGreed !== null && t.psychGreed !== undefined) setPsychGreed(Number(t.psychGreed));
+        if (t.psychFOMO !== null && t.psychFOMO !== undefined) setPsychFOMO(Number(t.psychFOMO));
+        if (t.psychRevenge !== null && t.psychRevenge !== undefined) setPsychRevenge(Number(t.psychRevenge));
+        if (t.psychDiscipline !== null && t.psychDiscipline !== undefined) setPsychDiscipline(Number(t.psychDiscipline));
+        if (t.psychStress !== null && t.psychStress !== undefined) setPsychStress(Number(t.psychStress));
+
+        if (t.emotionBefore) setEmotionBefore(t.emotionBefore);
+        if (t.emotionDuring) setEmotionDuring(t.emotionDuring);
+        if (t.emotionAfter) setEmotionAfter(t.emotionAfter);
+
+        if (t.followedPlan !== null && t.followedPlan !== undefined) setFollowedPlan(t.followedPlan);
+        if (t.brokeRule !== null && t.brokeRule !== undefined) setBrokeRule(t.brokeRule);
+        if (t.enteredTooEarly !== null && t.enteredTooEarly !== undefined) setEnteredTooEarly(t.enteredTooEarly);
+        if (t.movedSL !== null && t.movedSL !== undefined) setMovedSL(t.movedSL);
+        if (t.closedEarly !== null && t.closedEarly !== undefined) setClosedEarly(t.closedEarly);
+        if (t.overtraded !== null && t.overtraded !== undefined) setOvertraded(t.overtraded);
+
+        if (t.mistakes) {
+          try {
+            const m = typeof t.mistakes === "string" ? JSON.parse(t.mistakes) : t.mistakes;
+            setMistakesInput(Array.isArray(m) ? m.join("\n") : String(m));
+          } catch (e) {
+            setMistakesInput(String(t.mistakes));
+          }
+        }
+
+        if (t.positives) {
+          try {
+            const p = typeof t.positives === "string" ? JSON.parse(t.positives) : t.positives;
+            setPositivesInput(Array.isArray(p) ? p.join("\n") : String(p));
+          } catch (e) {
+            setPositivesInput(String(t.positives));
+          }
+        }
+
+        if (t.notes) setNotes(t.notes);
+        if (t.gc) setGc(t.gc);
+        if (t.ec) setEc(t.ec);
+        if (t.images && Array.isArray(t.images)) {
+          setImages(t.images.map((img: any) => apiImageToFormItem(img)));
+        }
+      } catch (err: any) {
+        alert(`Failed to load trade: ${err.message}`);
+      } finally {
+        setLoadingTrade(false);
+      }
+    }
+    fetchTrade();
+  }, [id]);
 
   // Calculations
   const entryNum = entryPrice !== "" ? Number(entryPrice) : null;
@@ -159,15 +281,14 @@ export default function AddTradePage() {
   }
 
   const effectiveRRMagnitude = calculatedActualRR;
-
   const riskAmtNum = Number(riskAmount) || 300;
   const computedPnl = computePnlFromResult(riskAmtNum, effectiveRRMagnitude, result);
-
-  const [submitting, setSubmitting] = useState(false);
 
   const toggleIct = (item: string) => {
     setSelectedIct((prev) => (prev.includes(item) ? prev.filter((i) => i !== item) : [...prev, item]));
   };
+
+  const [uploadingImage, setUploadingImage] = useState(false);
 
   const addImage = () => {
     if (!newImgUrl) return;
@@ -179,7 +300,20 @@ export default function AddTradePage() {
     setImages(images.filter((_, i) => i !== index));
   };
 
-  const [uploadingImage, setUploadingImage] = useState(false);
+  const handleDirectGalleryUpload = async (file: File) => {
+    setUploadingImage(true);
+    try {
+      const { path, previewUrl } = await uploadFileToStorage(file);
+      setImages((prev) => [
+        ...prev,
+        { type: newImgType, url: path, previewUrl, caption: `${newImgType.replace("_", " ")} Screenshot` },
+      ]);
+    } catch (err: any) {
+      alert(`Failed to upload image: ${err.message}`);
+    } finally {
+      setUploadingImage(false);
+    }
+  };
 
   const handleOcrFileUpload = async (file: File) => {
     setOcrLoading(true);
@@ -239,21 +373,6 @@ export default function AddTradePage() {
     setDetectedOCR(null);
   };
 
-  const handleDirectGalleryUpload = async (file: File) => {
-    setUploadingImage(true);
-    try {
-      const { path, previewUrl } = await uploadFileToStorage(file);
-      setImages((prev) => [
-        ...prev,
-        { type: newImgType, url: path, previewUrl, caption: `${newImgType.replace("_", " ")} Screenshot` },
-      ]);
-    } catch (err: any) {
-      alert(`Failed to upload image: ${err.message}`);
-    } finally {
-      setUploadingImage(false);
-    }
-  };
-
   const dragDropHandlers = buildDragDropHandlers((file) => handleOcrFileUpload(file));
 
   useEffect(() => {
@@ -285,7 +404,7 @@ export default function AddTradePage() {
         riskAmount: riskAmtNum,
         riskPercentage: riskPercentage !== "" ? Number(riskPercentage) : 1.0,
         plannedRR: effectiveRRMagnitude,
-        possibleRR: possibleRR !== "" ? Number(possibleRR) : undefined,
+        possibleRR: possibleRR !== "" ? Number(possibleRR) : null,
         actualR: effectiveRRMagnitude,
         pnl: computedPnl,
         result,
@@ -331,25 +450,33 @@ export default function AddTradePage() {
         images: formImagesForApi(images),
       };
 
-      const res = await fetch("/api/trades", {
-        method: "POST",
+      const res = await fetch(`/api/trades/${id}`, {
+        method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
 
       if (!res.ok) {
         const json = await res.json().catch(() => ({}));
-        throw new Error(json.error || "Failed to save trade");
+        throw new Error(json.error || "Failed to update trade");
       }
 
       router.push("/journal");
       router.refresh();
     } catch (err: any) {
-      alert(`Error saving trade: ${err.message}`);
+      alert(`Error updating trade: ${err.message}`);
     } finally {
       setSubmitting(false);
     }
   };
+
+  if (loadingTrade) {
+    return (
+      <div className="flex items-center justify-center min-h-[50vh]">
+        <div className="text-sm font-semibold text-[#38BDF8] animate-pulse">Loading trade details...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-5xl mx-auto space-y-6">
@@ -364,8 +491,8 @@ export default function AddTradePage() {
             <ArrowLeft className="w-5 h-5" />
           </button>
           <div>
-            <h1 className="text-xl font-extrabold text-white">Log New Trade Record</h1>
-            <p className="text-xs text-[#94A3B8]">Fast execution logging, TradingView OCR auto-detection & journal reflection</p>
+            <h1 className="text-xl font-extrabold text-white">Edit Trade Record</h1>
+            <p className="text-xs text-[#94A3B8]">Modify execution numbers, outcome result, setups & reflections</p>
           </div>
         </div>
         <button
@@ -374,7 +501,7 @@ export default function AddTradePage() {
           className="flex items-center gap-2 px-5 py-2.5 text-xs font-bold rounded-xl bg-[#2563EB] text-white hover:bg-[#1D4ED8] transition-all disabled:opacity-50"
         >
           <Save className="w-4 h-4" />
-          <span>{submitting ? "Saving..." : "Save Trade Entry"}</span>
+          <span>{submitting ? "Updating..." : "Update Trade Entry"}</span>
         </button>
       </div>
 
@@ -547,7 +674,7 @@ export default function AddTradePage() {
                     <span className="text-base font-extrabold">WIN</span>
                   </div>
                   <span className="text-xs font-mono font-bold">
-                    {formatRRMagnitude(effectiveRRMagnitude)} ({formatPnlDisplay(computePnlFromResult(riskAmtNum, effectiveRRMagnitude, "WIN"))})
+                    +{effectiveRRMagnitude}R (+$${(riskAmtNum * effectiveRRMagnitude).toLocaleString()})
                   </span>
                 </button>
 
@@ -565,7 +692,7 @@ export default function AddTradePage() {
                     <span className="text-base font-extrabold">LOSS</span>
                   </div>
                   <span className="text-xs font-mono font-bold">
-                    -1.00R ({formatPnlDisplay(computePnlFromResult(riskAmtNum, effectiveRRMagnitude, "LOSS"))})
+                    -1.00R (-$${riskAmtNum.toLocaleString()})
                   </span>
                 </button>
 
@@ -582,7 +709,7 @@ export default function AddTradePage() {
                     <MinusCircle className="w-5 h-5" />
                     <span className="text-base font-extrabold">BREAKEVEN</span>
                   </div>
-                  <span className="text-xs font-mono font-bold">0.00R ({formatPnlDisplay(0)})</span>
+                  <span className="text-xs font-mono font-bold">0.00R ($0.00)</span>
                 </button>
               </div>
             </div>
@@ -1419,7 +1546,8 @@ export default function AddTradePage() {
             </div>
 
             {/* Direct File Upload & Drag-Drop Card */}
-            <div className="p-5 rounded-xl bg-[#050B14] border border-dashed border-[#1E293B] hover:border-[#38BDF8] transition-all text-center space-y-3"
+            <div
+              className="p-5 rounded-xl bg-[#050B14] border border-dashed border-[#1E293B] hover:border-[#38BDF8] transition-all text-center space-y-3"
               {...buildDragDropHandlers((file) => handleDirectGalleryUpload(file))}
             >
               <Upload className="w-8 h-8 text-[#38BDF8] mx-auto" />

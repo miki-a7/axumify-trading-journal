@@ -8,13 +8,17 @@ export default function ChecklistsPage() {
   const [rules, setRules] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const [newChecklistTitle, setNewChecklistTitle] = useState("");
   const [newRuleText, setNewRuleText] = useState("");
   const [newRuleCategory, setNewRuleCategory] = useState("RISK");
 
   const fetchData = async () => {
     try {
       setLoading(true);
-      const [cRes, rRes] = await Promise.all([fetch("/api/checklists"), fetch("/api/rules")]);
+      const [cRes, rRes] = await Promise.all([
+        fetch("/api/checklists", { cache: "no-store" }),
+        fetch("/api/rules", { cache: "no-store" }),
+      ]);
 
       if (cRes.ok) {
         const cJson = await cRes.json();
@@ -43,6 +47,52 @@ export default function ChecklistsPage() {
         body: JSON.stringify({ itemId, checked: !currentStatus }),
       });
       fetchData();
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const addChecklist = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newChecklistTitle.trim()) return;
+    try {
+      const res = await fetch("/api/checklists", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: newChecklistTitle.trim(),
+          category: "PRE_MARKET",
+          items: [
+            "Review market bias & HTF key levels",
+            "Check high-impact economic news calendar",
+            "Verify risk limit and position size calculation",
+          ],
+        }),
+      });
+      if (res.ok) {
+        setNewChecklistTitle("");
+        fetchData();
+      }
+    } catch (err) {
+      alert("Failed to create checklist");
+    }
+  };
+
+  const deleteChecklist = async (id: string) => {
+    if (!confirm("Are you sure you want to delete this checklist?")) return;
+    try {
+      const res = await fetch(`/api/checklists?id=${id}`, { method: "DELETE" });
+      if (res.ok) fetchData();
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const deleteChecklistItem = async (itemId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      const res = await fetch(`/api/checklists?itemId=${itemId}`, { method: "DELETE" });
+      if (res.ok) fetchData();
     } catch (err) {
       console.error(err);
     }
@@ -91,38 +141,76 @@ export default function ChecklistsPage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {/* Pre-Market Checklist */}
         <div className="p-6 rounded-2xl bg-[#0B1220] border border-[#1E293B] space-y-4">
-          <h2 className="text-sm font-bold text-[#38BDF8] uppercase tracking-wider flex items-center gap-2">
-            <CheckSquare className="w-4 h-4" />
-            Pre-Market Execution Checklist
-          </h2>
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-bold text-[#38BDF8] uppercase tracking-wider flex items-center gap-2">
+              <CheckSquare className="w-4 h-4" />
+              Pre-Market Execution Checklist
+            </h2>
+          </div>
+
+          <form onSubmit={addChecklist} className="flex gap-2">
+            <input
+              type="text"
+              placeholder="New checklist title..."
+              value={newChecklistTitle}
+              onChange={(e) => setNewChecklistTitle(e.target.value)}
+              className="flex-1 px-3.5 py-2 rounded-xl bg-[#050B14] border border-[#1E293B] text-xs text-white"
+            />
+            <button
+              type="submit"
+              className="px-4 py-2 text-xs font-bold rounded-xl bg-[#2563EB] text-white hover:bg-[#1D4ED8]"
+            >
+              Add Checklist
+            </button>
+          </form>
 
           {checklists.map((cl) => (
-            <div key={cl.id} className="space-y-2">
-              <h3 className="text-xs font-bold text-white mb-2">{cl.title}</h3>
+            <div key={cl.id} className="p-4 rounded-xl bg-[#050B14] border border-[#1E293B] space-y-3">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xs font-bold text-white">{cl.title}</h3>
+                <button
+                  onClick={() => deleteChecklist(cl.id)}
+                  title="Delete Checklist"
+                  className="p-1 rounded text-[#64748B] hover:text-[#EF4444] hover:bg-[#EF4444]/10 transition-colors"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
+
               <div className="space-y-2">
                 {cl.items?.map((item: any) => (
-                  <label
+                  <div
                     key={item.id}
                     onClick={() => toggleCheckItem(item.id, item.checked)}
-                    className={`flex items-center gap-3 p-3 rounded-xl border transition-all cursor-pointer ${
+                    className={`flex items-center justify-between p-3 rounded-xl border transition-all cursor-pointer ${
                       item.checked
                         ? "bg-[#2563EB]/10 border-[#2563EB]/40 text-white"
-                        : "bg-[#050B14] border-[#1E293B] text-[#94A3B8] hover:text-white"
+                        : "bg-[#0B1220] border-[#1E293B] text-[#94A3B8] hover:text-white"
                     }`}
                   >
-                    <div
-                      className={`w-5 h-5 rounded-md flex items-center justify-center border ${
-                        item.checked
-                          ? "bg-[#2563EB] border-[#2563EB] text-white"
-                          : "border-[#64748B]"
-                      }`}
-                    >
-                      {item.checked && <Check className="w-3.5 h-3.5" />}
+                    <div className="flex items-center gap-3">
+                      <div
+                        className={`w-5 h-5 rounded-md flex items-center justify-center border ${
+                          item.checked
+                            ? "bg-[#2563EB] border-[#2563EB] text-white"
+                            : "border-[#64748B]"
+                        }`}
+                      >
+                        {item.checked && <Check className="w-3.5 h-3.5" />}
+                      </div>
+                      <span className={`text-xs font-medium ${item.checked ? "line-through text-[#94A3B8]" : ""}`}>
+                        {item.text}
+                      </span>
                     </div>
-                    <span className={`text-xs font-medium ${item.checked ? "line-through text-[#94A3B8]" : ""}`}>
-                      {item.text}
-                    </span>
-                  </label>
+
+                    <button
+                      onClick={(e) => deleteChecklistItem(item.id, e)}
+                      title="Delete Item"
+                      className="p-1 rounded text-[#64748B] hover:text-[#EF4444] transition-colors"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 ))}
               </div>
             </div>

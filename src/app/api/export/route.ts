@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
 
+export const dynamic = "force-dynamic";
+
 export async function GET(req: NextRequest) {
   try {
     const user = await getCurrentUser();
@@ -68,7 +70,8 @@ export async function GET(req: NextRequest) {
       "Exit Price",
       "Position Size",
       "Risk ($)",
-      "Planned R:R",
+      "Actual R:R",
+      "Possible R:R",
       "Actual R",
       "P&L ($)",
       "MAE",
@@ -80,6 +83,8 @@ export async function GET(req: NextRequest) {
       "Result",
       "Grade",
       "Setup",
+      "GC (General Confluence)",
+      "EC (Execution Confluence)",
       "HTF Bias",
       "Notes",
     ];
@@ -97,8 +102,9 @@ export async function GET(req: NextRequest) {
       t.exitPrice || "",
       t.positionSize || "",
       t.riskAmount || "",
-      t.plannedRR || "",
       t.actualR,
+      t.possibleRR || "",
+      Number(t.actualR) >= 0 ? `+${Number(t.actualR).toFixed(2)}` : `${Number(t.actualR).toFixed(2)}`,
       t.pnl,
       t.mae || "",
       t.mfe || "",
@@ -109,6 +115,8 @@ export async function GET(req: NextRequest) {
       t.result,
       t.grade || "",
       `"${(t.setup || "").replace(/"/g, '""')}"`,
+      `"${(t.gc || "").replace(/"/g, '""')}"`,
+      `"${(t.ec || "").replace(/"/g, '""')}"`,
       t.htfBias || "",
       `"${(t.notes || "").replace(/"/g, '""')}"`,
     ]);

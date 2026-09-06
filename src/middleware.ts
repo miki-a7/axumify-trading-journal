@@ -46,6 +46,9 @@ export async function middleware(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
+  const sessionUserCookie = request.cookies.get("axumify_session_user_id")?.value;
+  const isAuthenticated = Boolean(user || sessionUserCookie);
+
   const isAuthPage = request.nextUrl.pathname.startsWith("/login");
   const isProtectedPage =
     request.nextUrl.pathname === "/" ||
@@ -57,14 +60,11 @@ export async function middleware(request: NextRequest) {
     request.nextUrl.pathname.startsWith("/prop-tracker") ||
     request.nextUrl.pathname.startsWith("/settings");
 
-  if (!user && isProtectedPage) {
-    // Only redirect if explicitly in production Supabase Auth mode
-    if (process.env.NODE_ENV === "production" && process.env.NEXT_PUBLIC_SUPABASE_URL) {
-      return NextResponse.redirect(new URL("/login", request.url));
-    }
+  if (!isAuthenticated && isProtectedPage) {
+    return NextResponse.redirect(new URL("/login", request.url));
   }
 
-  if (user && isAuthPage) {
+  if (isAuthenticated && isAuthPage) {
     return NextResponse.redirect(new URL("/", request.url));
   }
 

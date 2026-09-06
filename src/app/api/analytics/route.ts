@@ -9,6 +9,8 @@ import {
   TradeData,
 } from "@/lib/calculations/stats";
 
+export const dynamic = "force-dynamic";
+
 export async function GET(req: NextRequest) {
   try {
     const user = await getCurrentUser();
@@ -26,17 +28,10 @@ export async function GET(req: NextRequest) {
       result: searchParams.get("result") || undefined,
     };
 
-    let rawTrades: any[] = [];
-    try {
-      rawTrades = await db.trade.findMany({
-        where: { userId: user.id },
-        orderBy: { date: "asc" },
-      });
-    } catch (dbErr) {
-      console.warn("Local DB connection error in analytics, using sample trade fallback:", dbErr);
-      const { sampleTrades } = await import("@/lib/mock-data");
-      rawTrades = sampleTrades;
-    }
+    const rawTrades = await db.trade.findMany({
+      where: { userId: user.id },
+      orderBy: { date: "asc" },
+    });
 
     // Map Prisma Decimal types to JS numbers
     const trades: TradeData[] = rawTrades.map((t) => ({
@@ -47,7 +42,7 @@ export async function GET(req: NextRequest) {
       exitPrice: t.exitPrice ? Number(t.exitPrice) : null,
       positionSize: t.positionSize ? Number(t.positionSize) : null,
       riskAmount: t.riskAmount ? Number(t.riskAmount) : null,
-      plannedRR: t.plannedRR ? Number(t.plannedRR) : null,
+      possibleRR: t.possibleRR ? Number(t.possibleRR) : null,
       actualR: Number(t.actualR),
       pnl: Number(t.pnl),
       mae: t.mae ? Number(t.mae) : null,
@@ -79,7 +74,8 @@ export async function GET(req: NextRequest) {
       const sess = t.session || "Unknown";
       const setup = t.setup || "Unspecified";
       const inst = t.instrument || "Other";
-      const day = daysOfWeek[new Date(t.date).getDay()];
+      const d = new Date(t.date);
+      const day = daysOfWeek[d.getUTCDay()];
 
       if (!sessionMap[sess]) sessionMap[sess] = { trades: 0, pnl: 0, r: 0, wins: 0 };
       sessionMap[sess].trades++;

@@ -18,14 +18,15 @@ export default function LoginPage() {
     setError("");
 
     try {
-      const supabase = createClient();
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
       });
 
-      if (error) {
-        throw new Error(error.message);
+      const json = await res.json();
+      if (!res.ok || json.error) {
+        throw new Error(json.error || "Invalid login credentials.");
       }
 
       router.push("/");

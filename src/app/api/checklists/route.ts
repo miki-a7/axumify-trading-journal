@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
 
+export const dynamic = "force-dynamic";
+
 export async function GET() {
   try {
     const user = await getCurrentUser();
@@ -53,15 +55,83 @@ export async function PUT(req: NextRequest) {
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const body = await req.json();
-    const { itemId, checked } = body;
+    const { itemId, checked, text } = body;
 
-    const item = await db.checklistItem.update({
-      where: { id: itemId },
-      data: { checked },
+    if (!itemId) {
+      return NextResponse.json({ error: "itemId is required" }, { status: 400 });
+    }
+
+    const item = await db.checklistItem.findFirst({
+      where: {
+        id: itemId,
+        checklist: { userId: user.id },
+      },
     });
 
-    return NextResponse.json({ item });
+    if (!item) {
+      return NextResponse.json({ error: "Item not found" }, { status: 404 });
+    }
+
+    const updated = await db.checklistItem.update({
+      where: { id: itemId },
+      data: {
+        ...(checked !== undefined && { checked }),
+        ...(text !== undefined && { text }),
+      },
+    });
+
+    return NextResponse.json({ item: updated });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 400 });
+  }
+}
+
+export async function DELETE(req: NextRequest) {
+  try {
+    const user = await getCurrentUser();
+    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+    const { searchParams } = new URL(req.url);
+    const id = searchParams.get("id");
+    const itemId = searchParams.get("itemId");
+
+    if (itemId) {
+      const item = await db.checklistItem.findFirst({
+        where: {
+          id: itemId,
+          checklist: { userId: user.id },
+        },
+      });
+
+      if (!item) {
+        return NextResponse.json({ error: "Checklist item not found" }, { status: 404 });
+      }
+
+      await db.checklistItem.delete({
+        where: { id: itemId },
+      });
+
+      return NextResponse.json({ success: true });
+    }
+
+    if (id) {
+      const checklist = await db.checklist.findFirst({
+        where: { id, userId: user.id },
+      });
+
+      if (!checklist) {
+        return NextResponse.json({ error: "Checklist not found" }, { status: 404 });
+      }
+
+      await db.checklist.deleteMany({
+        where: { id, userId: user.id },
+      });
+
+      return NextResponse.json({ success: true });
+    }
+
+    return NextResponse.json({ error: "id or itemId is required" }, { status: 400 });
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

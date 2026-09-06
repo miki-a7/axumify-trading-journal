@@ -14,10 +14,27 @@ import {
   Target,
 } from "lucide-react";
 import Link from "next/link";
-import { calculateTradingStats, getISOWeekKey, TradeData } from "@/lib/calculations/stats";
+import { calculateTradingStats, getUTCDateString } from "@/lib/calculations/stats";
+import {
+  CalendarMode,
+  ETHIOPIAN_MONTHS,
+  ETHIOPIAN_WEEKDAYS,
+  GREGORIAN_MONTHS,
+  GREGORIAN_WEEKDAYS,
+  gregorianToEthiopian,
+  ethiopianToGregorian,
+  getDaysInEthiopianMonth,
+} from "@/lib/calculations/dates";
 
 export default function CalendarPage() {
-  const [currentDate, setCurrentDate] = useState(new Date(2026, 7, 1)); // August 2026 default
+  const [calendarMode, setCalendarMode] = useState<CalendarMode>("GC");
+  const [currentDate, setCurrentDate] = useState(() => new Date());
+  
+  // Ethiopian calendar state
+  const initialEth = gregorianToEthiopian(new Date());
+  const [ecYear, setEcYear] = useState<number>(initialEth.year);
+  const [ecMonth, setEcMonth] = useState<number>(initialEth.month);
+
   const [trades, setTrades] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedDayTrades, setSelectedDayTrades] = useState<any[] | null>(null);
@@ -26,7 +43,7 @@ export default function CalendarPage() {
   const fetchTrades = async () => {
     try {
       setLoading(true);
-      const res = await fetch("/api/trades");
+      const res = await fetch("/api/trades", { cache: "no-store" });
       if (res.ok) {
         const json = await res.json();
         setTrades(json.trades || []);
@@ -42,31 +59,164 @@ export default function CalendarPage() {
     fetchTrades();
   }, []);
 
-  const year = currentDate.getFullYear();
-  const month = currentDate.getMonth();
-
-  const prevMonth = () => setCurrentDate(new Date(year, month - 1, 1));
-  const nextMonth = () => setCurrentDate(new Date(year, month + 1, 1));
-  const todayMonth = () => setCurrentDate(new Date(2026, 7, 1));
-
-  const firstDayOfWeek = new Date(year, month, 1).getDay(); // 0 = Sun, 6 = Sat
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-
-  // Map trades into daily buckets
+  // Map all trades into daily buckets using UTC date strings: "YYYY-MM-DD"
   const dailyMap: Record<string, any[]> = {};
-  const monthTrades: any[] = [];
-
   trades.forEach((t) => {
-    const tDate = new Date(t.date);
-    if (tDate.getFullYear() === year && tDate.getMonth() === month) {
-      monthTrades.push(t);
-      const key = `${year}-${String(month + 1).padStart(2, "0")}-${String(tDate.getDate()).padStart(2, "0")}`;
-      if (!dailyMap[key]) dailyMap[key] = [];
-      dailyMap[key].push(t);
-    }
+    const utcDateStr = getUTCDateString(t.date);
+    if (!dailyMap[utcDateStr]) dailyMap[utcDateStr] = [];
+    dailyMap[utcDateStr].push(t);
   });
 
-  // Calculate overall monthly stats from raw trade records
+  // Gregorian navigation
+  const gcYear = currentDate.getFullYear();
+  const gcMonth = currentDate.getMonth();
+
+  const prevGcMonth = () => setCurrentDate(new Date(gcYear, gcMonth - 1, 1));
+  const nextGcMonth = () => setCurrentDate(new Date(gcYear, gcMonth + 1, 1));
+  const todayGcMonth = () => {
+    const now = new Date();
+    setCurrentDate(now);
+    const eth = gregorianToEthiopian(now);
+    setEcYear(eth.year);
+    setEcMonth(eth.month);
+  };
+
+  // Ethiopian navigation
+  const prevEcMonth = () => {
+    if (ecMonth === 1) {
+      setEcYear((prev) => prev - 1);
+      setEcMonth(13);
+    } else {
+      setEcMonth((prev) => prev - 1);
+    }
+  };
+  const nextEcMonth = () => {
+    if (ecMonth === 13) {
+      setEcYear((prev) => prev + 1);
+      setEcMonth(1);
+    } else {
+      setEcMonth((prev) => prev + 1);
+    }
+  };
+
+  // Build grid based on active calendar mode
+  let calendarRows: Array<Array<any | null>> = [];
+  let monthTrades: any[] = [];
+  let titleString = "";
+  let weekdaysHeader: readonly string[] = GREGORIAN_WEEKDAYS;
+
+  if (calendarMode === "GC") {
+    weekdaysHeader = GREGORIAN_WEEKDAYS;
+    titleString = `${GREGORIAN_MONTHS[gcMonth]} ${gcYear}`;
+    const firstDayOfWeek = new Date(gcYear, gcMonth, 1).getDay(); // 0 = Sun, 6 = Sat
+    const daysInMonth = new Date(gcYear, gcMonth + 1, 0).getDate();
+
+    let currentWeek: Array<any | null> = [];
+    for (let i = 0; i < firstDayOfWeek; i++) {
+      currentWeek.push(null);
+    }
+
+    for (let day = 1; day <= daysInMonth; day++) {
+      const key = `${gcYear}-${String(gcMonth + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+      const dayTrades = dailyMap[key] || [];
+      monthTrades.push(...dayTrades);
+
+      const stats = calculateTradingStats(
+        dayTrades.map((t) => ({
+          ...t,
+          entryPrice: Number(t.entryPrice),
+          stopLoss: Number(t.stopLoss),
+          takeProfit: Number(t.takeProfit),
+          actualR: Number(t.actualR),
+          pnl: Number(t.pnl),
+        }))
+      );
+
+      currentWeek.push({
+        dateStr: key,
+        dayNumber: day,
+        tradesCount: stats.totalTrades,
+        wins: stats.winningTrades,
+        losses: stats.losingTrades,
+        be: stats.breakevenTrades,
+        winRate: stats.winRate,
+        pnl: stats.netPnl,
+        r: stats.totalR,
+        trades: dayTrades,
+        title: `${GREGORIAN_MONTHS[gcMonth]} ${day}, ${gcYear}`,
+      });
+
+      if (currentWeek.length === 7) {
+        calendarRows.push(currentWeek);
+        currentWeek = [];
+      }
+    }
+
+    if (currentWeek.length > 0) {
+      while (currentWeek.length < 7) {
+        currentWeek.push(null);
+      }
+      calendarRows.push(currentWeek);
+    }
+  } else {
+    // EC Mode
+    weekdaysHeader = ETHIOPIAN_WEEKDAYS;
+    titleString = `${ETHIOPIAN_MONTHS[ecMonth - 1]} ${ecYear} (EC)`;
+    const daysInMonth = getDaysInEthiopianMonth(ecYear, ecMonth);
+    const firstDayGreg = ethiopianToGregorian(ecYear, ecMonth, 1);
+    const firstDayOfWeek = firstDayGreg.dayOfWeek; // 0 = Sun, 6 = Sat
+
+    let currentWeek: Array<any | null> = [];
+    for (let i = 0; i < firstDayOfWeek; i++) {
+      currentWeek.push(null);
+    }
+
+    for (let day = 1; day <= daysInMonth; day++) {
+      const gregTarget = ethiopianToGregorian(ecYear, ecMonth, day);
+      const key = gregTarget.dateStr;
+      const dayTrades = dailyMap[key] || [];
+      monthTrades.push(...dayTrades);
+
+      const stats = calculateTradingStats(
+        dayTrades.map((t) => ({
+          ...t,
+          entryPrice: Number(t.entryPrice),
+          stopLoss: Number(t.stopLoss),
+          takeProfit: Number(t.takeProfit),
+          actualR: Number(t.actualR),
+          pnl: Number(t.pnl),
+        }))
+      );
+
+      currentWeek.push({
+        dateStr: key,
+        dayNumber: day,
+        tradesCount: stats.totalTrades,
+        wins: stats.winningTrades,
+        losses: stats.losingTrades,
+        be: stats.breakevenTrades,
+        winRate: stats.winRate,
+        pnl: stats.netPnl,
+        r: stats.totalR,
+        trades: dayTrades,
+        title: `${ETHIOPIAN_MONTHS[ecMonth - 1]} ${day}, ${ecYear} EC`,
+      });
+
+      if (currentWeek.length === 7) {
+        calendarRows.push(currentWeek);
+        currentWeek = [];
+      }
+    }
+
+    if (currentWeek.length > 0) {
+      while (currentWeek.length < 7) {
+        currentWeek.push(null);
+      }
+      calendarRows.push(currentWeek);
+    }
+  }
+
+  // Monthly stats
   const monthStats = calculateTradingStats(
     monthTrades.map((t) => ({
       ...t,
@@ -78,62 +228,6 @@ export default function CalendarPage() {
     }))
   );
 
-  const monthNames = [
-    "January", "February", "March", "April", "May", "June",
-    "July", "August", "September", "October", "November", "December"
-  ];
-
-  // Build calendar weeks (7 days + 1 summary column)
-  const calendarRows: Array<Array<any | null>> = [];
-  let currentWeek: Array<any | null> = [];
-
-  // Pad beginning of first week
-  for (let i = 0; i < firstDayOfWeek; i++) {
-    currentWeek.push(null);
-  }
-
-  for (let day = 1; day <= daysInMonth; day++) {
-    const key = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-    const dayTrades = dailyMap[key] || [];
-
-    const stats = calculateTradingStats(
-      dayTrades.map((t) => ({
-        ...t,
-        entryPrice: Number(t.entryPrice),
-        stopLoss: Number(t.stopLoss),
-        takeProfit: Number(t.takeProfit),
-        actualR: Number(t.actualR),
-        pnl: Number(t.pnl),
-      }))
-    );
-
-    currentWeek.push({
-      dateStr: key,
-      dayNumber: day,
-      tradesCount: stats.totalTrades,
-      wins: stats.winningTrades,
-      losses: stats.losingTrades,
-      be: stats.breakevenTrades,
-      winRate: stats.winRate,
-      pnl: stats.netPnl,
-      r: stats.totalR,
-      trades: dayTrades,
-    });
-
-    if (currentWeek.length === 7) {
-      calendarRows.push(currentWeek);
-      currentWeek = [];
-    }
-  }
-
-  // Pad end of last week if incomplete
-  if (currentWeek.length > 0) {
-    while (currentWeek.length < 7) {
-      currentWeek.push(null);
-    }
-    calendarRows.push(currentWeek);
-  }
-
   return (
     <div className="space-y-6">
       {/* Calendar Header Controls */}
@@ -142,31 +236,57 @@ export default function CalendarPage() {
           <CalendarIcon className="w-6 h-6 text-[#38BDF8]" />
           <div>
             <h1 className="text-2xl font-extrabold text-white">
-              {monthNames[month]} {year}
+              {titleString}
             </h1>
             <p className="text-xs text-[#94A3B8]">
-              Automated central daily and weekly performance matrix
+              Automated central daily and weekly performance matrix ({calendarMode === "EC" ? "Ethiopian Calendar" : "Gregorian Calendar"})
             </p>
           </div>
         </div>
 
         <div className="flex items-center gap-3">
+          {/* GC / EC Mode Toggle */}
+          <div className="flex items-center p-1 rounded-xl bg-[#050B14] border border-[#1E293B]">
+            <button
+              onClick={() => setCalendarMode("GC")}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
+                calendarMode === "GC"
+                  ? "bg-[#2563EB] text-white shadow-glow"
+                  : "text-[#94A3B8] hover:text-white"
+              }`}
+            >
+              GC
+            </button>
+            <button
+              onClick={() => setCalendarMode("EC")}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
+                calendarMode === "EC"
+                  ? "bg-[#2563EB] text-white shadow-glow"
+                  : "text-[#94A3B8] hover:text-white"
+              }`}
+            >
+              EC (ኢትዮጵያ)
+            </button>
+          </div>
+
           <button
-            onClick={todayMonth}
+            onClick={todayGcMonth}
             className="px-3.5 py-2 text-xs font-bold rounded-xl bg-[#101A2B] border border-[#1E293B] text-white hover:border-[#2563EB]"
           >
-            Current Month
+            Today
           </button>
           <div className="flex items-center gap-1">
             <button
-              onClick={prevMonth}
+              onClick={calendarMode === "GC" ? prevGcMonth : prevEcMonth}
               className="p-2 rounded-xl bg-[#050B14] border border-[#1E293B] text-[#94A3B8] hover:text-white"
+              title="Previous Month"
             >
               <ChevronLeft className="w-4 h-4" />
             </button>
             <button
-              onClick={nextMonth}
+              onClick={calendarMode === "GC" ? nextGcMonth : nextEcMonth}
               className="p-2 rounded-xl bg-[#050B14] border border-[#1E293B] text-[#94A3B8] hover:text-white"
+              title="Next Month"
             >
               <ChevronRight className="w-4 h-4" />
             </button>
@@ -183,7 +303,7 @@ export default function CalendarPage() {
               monthStats.netPnl >= 0 ? "text-[#22C55E]" : "text-[#EF4444]"
             }`}
           >
-            {monthStats.netPnl >= 0 ? `+$${monthStats.netPnl}` : `-$${Math.abs(monthStats.netPnl)}`}
+            {monthStats.netPnl >= 0 ? `+$${monthStats.netPnl.toLocaleString()}` : `-$${Math.abs(monthStats.netPnl).toLocaleString()}`}
           </span>
         </div>
 
@@ -229,7 +349,7 @@ export default function CalendarPage() {
 
       {/* Days of Week + Weekly Summary Header */}
       <div className="grid grid-cols-8 gap-2 text-center text-xs font-bold text-[#94A3B8] uppercase tracking-wider">
-        {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
+        {weekdaysHeader.map((day) => (
           <div key={day} className="py-2.5 rounded-xl bg-[#0B1220]/60 border border-[#1E293B]">
             {day}
           </div>
@@ -283,7 +403,7 @@ export default function CalendarPage() {
                     onClick={() => {
                       if (hasTrades) {
                         setSelectedDayTrades(cell.trades);
-                        setSelectedDayTitle(`${monthNames[month]} ${cell.dayNumber}, ${year}`);
+                        setSelectedDayTitle(cell.title);
                       }
                     }}
                     className={`min-h-[115px] p-2.5 rounded-2xl border transition-all duration-200 flex flex-col justify-between cursor-pointer ${
@@ -313,10 +433,10 @@ export default function CalendarPage() {
                             isProfitable ? "text-[#22C55E]" : isLosing ? "text-[#EF4444]" : "text-white"
                           }`}
                         >
-                          {isProfitable ? `+$${cell.pnl}` : `-$${Math.abs(cell.pnl)}`}
+                          {isProfitable ? `+$${cell.pnl.toLocaleString()}` : `-$${Math.abs(cell.pnl).toLocaleString()}`}
                         </div>
 
-                        {/* Breakdown: 3 trades · 2W/1L · 67% · +2.6R */}
+                        {/* Breakdown: 3 trades · 2W/1L · 67% */}
                         <div className="text-[10px] text-[#94A3B8] font-mono leading-tight">
                           <span>{cell.wins}W/{cell.losses}L</span>
                           <span className="mx-1">•</span>
@@ -362,7 +482,7 @@ export default function CalendarPage() {
                         weekStats.netPnl >= 0 ? "text-[#22C55E]" : "text-[#EF4444]"
                       }`}
                     >
-                      {weekStats.netPnl >= 0 ? `+$${weekStats.netPnl}` : `-$${Math.abs(weekStats.netPnl)}`}
+                      {weekStats.netPnl >= 0 ? `+$${weekStats.netPnl.toLocaleString()}` : `-$${Math.abs(weekStats.netPnl).toLocaleString()}`}
                     </div>
                     <div className="flex items-center justify-between text-[10px] font-bold font-mono">
                       <span className={weekStats.totalR >= 0 ? "text-[#22C55E]" : "text-[#EF4444]"}>
@@ -398,47 +518,55 @@ export default function CalendarPage() {
             </div>
 
             <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
-              {selectedDayTrades.map((t) => (
-                <div
-                  key={t.id}
-                  className="flex items-center justify-between p-3.5 rounded-xl bg-[#050B14] border border-[#1E293B]"
-                >
-                  <div className="flex items-center gap-3">
-                    <span className="text-sm font-bold text-white">{t.instrument}</span>
-                    <span
-                      className={`text-xs font-bold ${
-                        t.direction === "LONG" ? "text-[#22C55E]" : "text-[#EF4444]"
-                      }`}
-                    >
-                      {t.direction}
-                    </span>
-                    <span className="text-xs text-[#94A3B8]">{t.session}</span>
-                  </div>
+              {selectedDayTrades.map((t) => {
+                const isShort = t.direction === "SHORT";
 
-                  <div className="flex items-center gap-4">
-                    <span
-                      className={`font-mono font-bold text-xs ${
-                        Number(t.actualR) >= 0 ? "text-[#22C55E]" : "text-[#EF4444]"
-                      }`}
-                    >
-                      {Number(t.actualR) >= 0 ? `+${Number(t.actualR)}R` : `${Number(t.actualR)}R`}
-                    </span>
-                    <span
-                      className={`font-mono font-extrabold text-xs ${
-                        Number(t.pnl) >= 0 ? "text-[#22C55E]" : "text-[#EF4444]"
-                      }`}
-                    >
-                      {Number(t.pnl) >= 0 ? `+$${Number(t.pnl)}` : `-$${Math.abs(Number(t.pnl))}`}
-                    </span>
-                    <Link
-                      href={`/journal/${t.id}`}
-                      className="px-2.5 py-1 rounded-lg bg-[#2563EB] text-white text-xs font-bold hover:bg-[#1D4ED8]"
-                    >
-                      View
-                    </Link>
+                return (
+                  <div
+                    key={t.id}
+                    className="flex items-center justify-between p-3.5 rounded-xl bg-[#050B14] border border-[#1E293B]"
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className="text-sm font-bold text-white">{t.instrument}</span>
+                      <span
+                        className={`text-xs font-bold ${
+                          isShort ? "text-[#EF4444]" : "text-[#22C55E]"
+                        }`}
+                      >
+                        {t.direction}
+                      </span>
+                      <span className="text-xs text-[#94A3B8]">{t.session}</span>
+                    </div>
+
+                    <div className="flex items-center gap-4">
+                      <span
+                        className={`font-mono font-bold text-xs ${
+                          isShort
+                            ? "text-[#EF4444]"
+                            : Number(t.actualR) >= 0
+                            ? "text-[#22C55E]"
+                            : "text-[#EF4444]"
+                        }`}
+                      >
+                        {Number(t.actualR) >= 0 ? `+${Number(t.actualR)}R` : `${Number(t.actualR)}R`}
+                      </span>
+                      <span
+                        className={`font-mono font-extrabold text-xs ${
+                          Number(t.pnl) >= 0 ? "text-[#22C55E]" : "text-[#EF4444]"
+                        }`}
+                      >
+                        {Number(t.pnl) >= 0 ? `+$${Number(t.pnl).toLocaleString()}` : `-$${Math.abs(Number(t.pnl)).toLocaleString()}`}
+                      </span>
+                      <Link
+                        href={`/journal/${t.id}`}
+                        className="px-2.5 py-1 rounded-lg bg-[#2563EB] text-white text-xs font-bold hover:bg-[#1D4ED8]"
+                      >
+                        View
+                      </Link>
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         </div>

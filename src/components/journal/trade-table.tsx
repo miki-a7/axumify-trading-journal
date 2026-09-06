@@ -9,12 +9,15 @@ import {
   ChevronLeft,
   ChevronRight,
   Eye,
+  Edit,
   Trash2,
   CheckCircle,
   XCircle,
   MinusCircle,
   ExternalLink,
 } from "lucide-react";
+import { formatJournalDate, CalendarMode } from "@/lib/calculations/dates";
+import { getSignedR } from "@/lib/calculations/stats";
 
 export interface TradeItem {
   id: string;
@@ -23,13 +26,13 @@ export interface TradeItem {
   market: string;
   session: string;
   direction: string;
-  entryPrice: number;
-  stopLoss: number;
-  takeProfit: number;
+  entryPrice?: number;
+  stopLoss?: number;
+  takeProfit?: number;
   exitPrice?: number;
   positionSize?: number;
   riskAmount?: number;
-  plannedRR?: number;
+  possibleRR?: number;
   actualR: number;
   pnl: number;
   result: string; // WIN, LOSS, BREAKEVEN
@@ -41,9 +44,10 @@ export interface TradeItem {
 interface TradeTableProps {
   trades: TradeItem[];
   onDelete?: (id: string) => void;
+  calendarMode?: CalendarMode;
 }
 
-export default function TradeTable({ trades, onDelete }: TradeTableProps) {
+export default function TradeTable({ trades, onDelete, calendarMode = "GC" }: TradeTableProps) {
   const [search, setSearch] = useState("");
   const [selectedResult, setSelectedResult] = useState("ALL");
   const [selectedSession, setSelectedSession] = useState("ALL");
@@ -71,14 +75,39 @@ export default function TradeTable({ trades, onDelete }: TradeTableProps) {
 
   // Sort Logic
   const sorted = [...filtered].sort((a, b) => {
-    let valA = a[sortField];
-    let valB = b[sortField];
+    const valA = a[sortField];
+    const valB = b[sortField];
 
-    if (typeof valA === "string") valA = (valA as string).toLowerCase();
-    if (typeof valB === "string") valB = (valB as string).toLowerCase();
+    if (valA === valB) return 0;
+    if (valA === undefined || valA === null) return sortOrder === "asc" ? 1 : -1;
+    if (valB === undefined || valB === null) return sortOrder === "asc" ? -1 : 1;
 
-    if (valA! < valB!) return sortOrder === "asc" ? -1 : 1;
-    if (valA! > valB!) return sortOrder === "asc" ? 1 : -1;
+    if (sortField === "date") {
+      const timeA = new Date(valA as string).getTime();
+      const timeB = new Date(valB as string).getTime();
+      return sortOrder === "asc" ? timeA - timeB : timeB - timeA;
+    }
+
+    const numA = Number(valA);
+    const numB = Number(valB);
+    const isNumField =
+      sortField === "actualR" ||
+      sortField === "pnl" ||
+      sortField === "entryPrice" ||
+      sortField === "stopLoss" ||
+      sortField === "takeProfit" ||
+      sortField === "exitPrice" ||
+      sortField === "positionSize" ||
+      sortField === "riskAmount";
+
+    if (isNumField && !isNaN(numA) && !isNaN(numB)) {
+      return sortOrder === "asc" ? numA - numB : numB - numA;
+    }
+
+    const strA = String(valA).toLowerCase();
+    const strB = String(valB).toLowerCase();
+    if (strA < strB) return sortOrder === "asc" ? -1 : 1;
+    if (strA > strB) return sortOrder === "asc" ? 1 : -1;
     return 0;
   });
 
@@ -208,7 +237,7 @@ export default function TradeTable({ trades, onDelete }: TradeTableProps) {
                 className="py-4 px-4 text-right cursor-pointer hover:text-white"
               >
                 <div className="flex items-center justify-end gap-1.5">
-                  R-Multiple <ArrowUpDown className="w-3 h-3 text-[#64748B]" />
+                  Actual R:R <ArrowUpDown className="w-3 h-3 text-[#64748B]" />
                 </div>
               </th>
               <th
@@ -232,11 +261,8 @@ export default function TradeTable({ trades, onDelete }: TradeTableProps) {
               </tr>
             ) : (
               paginated.map((trade) => {
-                const formattedDate = new Date(trade.date).toLocaleDateString("en-US", {
-                  month: "short",
-                  day: "numeric",
-                  year: "numeric",
-                });
+                const formattedDate = formatJournalDate(trade.date, calendarMode);
+                const isShort = trade.direction === "SHORT";
 
                 return (
                   <tr
@@ -270,11 +296,11 @@ export default function TradeTable({ trades, onDelete }: TradeTableProps) {
                     </td>
 
                     <td className="py-3.5 px-4 font-mono text-right text-white">
-                      {trade.entryPrice}
+                      {trade.entryPrice ?? "—"}
                     </td>
 
                     <td className="py-3.5 px-4 font-mono text-right text-[#94A3B8]">
-                      {trade.stopLoss} / {trade.takeProfit}
+                      {trade.stopLoss != null && trade.takeProfit != null ? `${trade.stopLoss} / ${trade.takeProfit}` : "—"}
                     </td>
 
                     <td className="py-3.5 px-4 text-center whitespace-nowrap">
@@ -283,26 +309,33 @@ export default function TradeTable({ trades, onDelete }: TradeTableProps) {
 
                     <td
                       className={`py-3.5 px-4 font-mono font-bold text-right whitespace-nowrap ${
-                        trade.actualR > 0
+                        isShort
+                          ? "text-[#EF4444]"
+                          : Number(trade.actualR) > 0 && trade.result === "WIN"
                           ? "text-[#22C55E]"
-                          : trade.actualR < 0
+                          : trade.result === "LOSS"
                           ? "text-[#EF4444]"
                           : "text-[#F59E0B]"
                       }`}
                     >
-                      {trade.actualR >= 0 ? `+${trade.actualR}R` : `${trade.actualR}R`}
+                      {(() => {
+                        const signed = getSignedR(Number(trade.actualR), trade.result);
+                        if (signed > 0) return `+${signed.toFixed(2)}R`;
+                        if (signed < 0) return `${signed.toFixed(2)}R`;
+                        return "0.00R";
+                      })()}
                     </td>
 
                     <td
                       className={`py-3.5 px-4 font-mono font-extrabold text-right whitespace-nowrap ${
-                        trade.pnl > 0
+                        Number(trade.pnl) > 0
                           ? "text-[#22C55E]"
-                          : trade.pnl < 0
+                          : Number(trade.pnl) < 0
                           ? "text-[#EF4444]"
                           : "text-white"
                       }`}
                     >
-                      {trade.pnl >= 0 ? `+$${trade.pnl.toLocaleString()}` : `-$${Math.abs(trade.pnl).toLocaleString()}`}
+                      {Number(trade.pnl) >= 0 ? `+$${Number(trade.pnl).toLocaleString()}` : `-$${Math.abs(Number(trade.pnl)).toLocaleString()}`}
                     </td>
 
                     <td className="py-3.5 px-4 text-center whitespace-nowrap">
@@ -316,19 +349,27 @@ export default function TradeTable({ trades, onDelete }: TradeTableProps) {
                     </td>
 
                     <td className="py-3.5 px-4 text-center whitespace-nowrap">
-                      <div className="flex items-center justify-center gap-2">
+                      <div className="flex items-center justify-center gap-1.5">
                         <Link
                           href={`/journal/${trade.id}`}
-                          className="p-1.5 rounded-lg text-[#38BDF8] hover:bg-[#2563EB]/20"
+                          className="p-1.5 rounded-lg text-[#38BDF8] hover:bg-[#38BDF8]/10"
                           title="View Details"
                         >
                           <Eye className="w-4 h-4" />
                         </Link>
 
+                        <Link
+                          href={`/journal/${trade.id}/edit`}
+                          className="p-1.5 rounded-lg text-[#F59E0B] hover:bg-[#F59E0B]/10"
+                          title="Edit Trade"
+                        >
+                          <Edit className="w-4 h-4" />
+                        </Link>
+
                         {onDelete && (
                           <button
                             onClick={() => onDelete(trade.id)}
-                            className="p-1.5 rounded-lg text-[#EF4444] hover:bg-[#EF4444]/20"
+                            className="p-1.5 rounded-lg text-[#EF4444] hover:bg-[#EF4444]/10"
                             title="Delete Trade"
                           >
                             <Trash2 className="w-4 h-4" />
