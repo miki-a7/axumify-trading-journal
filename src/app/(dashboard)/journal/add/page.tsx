@@ -34,9 +34,9 @@ import {
 } from "@/lib/images/upload-client";
 import {
   calculateSingleTradeMetrics,
+  calculateTradeOutcome,
   formatRRMagnitude,
   formatPnlDisplay,
-  computePnlFromResult,
   formatSignedRDisplay,
 } from "@/lib/calculations/stats";
 
@@ -62,7 +62,7 @@ export default function AddTradePage() {
   const [positionSize, setPositionSize] = useState<number | "">("");
 
   // Risk & Outcome
-  const [riskAmount, setRiskAmount] = useState<number | "">(300);
+  const [riskAmount, setRiskAmount] = useState<number | "">("");
   const [riskPercentage, setRiskPercentage] = useState<number | "">(1.0);
   // Actual R:R magnitude — user enters positive number (e.g. 5), sign derived from result
   const [actualRRInput, setActualRRInput] = useState<number | "">("");
@@ -139,7 +139,7 @@ export default function AddTradePage() {
   const tpNum = takeProfit !== "" ? Number(takeProfit) : null;
 
   // Derive R:R magnitude: user input takes precedence, then price-derived
-  let calculatedActualRR = 2.0;
+  let calculatedActualRR: number | null = null;
   if (actualRRInput !== "" && Number(actualRRInput) > 0) {
     calculatedActualRR = Number(actualRRInput);
   } else if (entryNum !== null && slNum !== null && tpNum !== null) {
@@ -152,8 +152,10 @@ export default function AddTradePage() {
 
   const effectiveRRMagnitude = calculatedActualRR;
 
-  const riskAmtNum = Number(riskAmount) || 300;
-  const computedPnl = computePnlFromResult(riskAmtNum, effectiveRRMagnitude, result);
+  const riskAmtNum = riskAmount === "" ? null : Number(riskAmount);
+  const selectedOutcome = calculateTradeOutcome({ riskAmount: riskAmtNum, actualRR: effectiveRRMagnitude, result });
+  const outcomePreview = (previewResult: "WIN" | "LOSS" | "BREAKEVEN") => calculateTradeOutcome({ riskAmount: riskAmtNum, actualRR: effectiveRRMagnitude, result: previewResult });
+  const computedPnl = selectedOutcome.pnl;
 
   const [submitting, setSubmitting] = useState(false);
 
@@ -559,7 +561,7 @@ export default function AddTradePage() {
                     <span className="text-base font-extrabold">WIN</span>
                   </div>
                   <span className="text-xs font-mono font-bold">
-                    {formatRRMagnitude(effectiveRRMagnitude)} ({formatPnlDisplay(computePnlFromResult(riskAmtNum, effectiveRRMagnitude, "WIN"))})
+                    {formatSignedRDisplay(outcomePreview("WIN").actualR, "WIN")} ({formatPnlDisplay(outcomePreview("WIN").pnl)})
                   </span>
                 </button>
 
@@ -577,7 +579,7 @@ export default function AddTradePage() {
                     <span className="text-base font-extrabold">LOSS</span>
                   </div>
                   <span className="text-xs font-mono font-bold">
-                    {formatSignedRDisplay(effectiveRRMagnitude, "LOSS")} ({formatPnlDisplay(computePnlFromResult(riskAmtNum, effectiveRRMagnitude, "LOSS"))})
+                    {formatSignedRDisplay(outcomePreview("LOSS").actualR, "LOSS")} ({formatPnlDisplay(outcomePreview("LOSS").pnl)})
                   </span>
                 </button>
 
@@ -594,7 +596,7 @@ export default function AddTradePage() {
                     <MinusCircle className="w-5 h-5" />
                     <span className="text-base font-extrabold">BREAKEVEN</span>
                   </div>
-                  <span className="text-xs font-mono font-bold">{formatSignedRDisplay(effectiveRRMagnitude, "BREAKEVEN")} ({formatPnlDisplay(computePnlFromResult(riskAmtNum, effectiveRRMagnitude, "BREAKEVEN"))})</span>
+                  <span className="text-xs font-mono font-bold">{formatSignedRDisplay(outcomePreview("BREAKEVEN").actualR, "BREAKEVEN")} ({formatPnlDisplay(outcomePreview("BREAKEVEN").pnl)})</span>
                 </button>
               </div>
             </div>
@@ -838,7 +840,7 @@ export default function AddTradePage() {
                     direction === "SHORT" ? "text-[#EF4444]" : "text-[#38BDF8]"
                   }`}
                 >
-                  {effectiveRRMagnitude}R
+                  {formatRRMagnitude(effectiveRRMagnitude)}
                 </span>
               </div>
               <div>
@@ -859,9 +861,9 @@ export default function AddTradePage() {
                 <span className="text-[10px] font-bold text-[#94A3B8] uppercase block">Computed P&L</span>
                 <span
                   className={`text-base font-extrabold font-mono ${
-                    computedPnl > 0
+                    selectedOutcome.pnl !== null && selectedOutcome.pnl > 0
                       ? "text-[#22C55E]"
-                      : computedPnl < 0
+                      : selectedOutcome.pnl !== null && selectedOutcome.pnl < 0
                       ? "text-[#EF4444]"
                       : "text-white"
                   }`}

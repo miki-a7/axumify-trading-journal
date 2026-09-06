@@ -36,7 +36,7 @@ export const tradeBaseSchema = z.object({
   takeProfit: optionalNumber.nullable().default(null),
   exitPrice: optionalNumber.nullable().default(null),
   positionSize: optionalNumber.nullable().default(null),
-  riskAmount: optionalNumber.default(300),
+  riskAmount: optionalNumber.nullable().default(null),
   riskPercentage: optionalNumber.nullable().default(null),
   // plannedRR kept internally for DB backward-compat; not exposed to UI as "Planned R:R"
   plannedRR: optionalPositiveNumber.default(2.0),

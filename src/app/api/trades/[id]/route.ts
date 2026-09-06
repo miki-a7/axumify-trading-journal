@@ -67,9 +67,9 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     }
 
     const direction = validated.direction || existing.direction;
-    const riskAmt = validated.riskAmount !== undefined && validated.riskAmount !== null
-      ? Number(validated.riskAmount)
-      : (existing.riskAmount !== null ? Number(existing.riskAmount) : 300.0);
+    const riskAmt = validated.riskAmount !== undefined
+      ? (validated.riskAmount !== null ? Number(validated.riskAmount) : null)
+      : (existing.riskAmount !== null ? Number(existing.riskAmount) : null);
     // Use actualR from payload (takes precedence) or fall back to existing plannedRR as magnitude
     const rrMagnitudeInput = validated.actualR !== undefined && validated.actualR !== null && Number(validated.actualR) > 0
       ? Number(validated.actualR)

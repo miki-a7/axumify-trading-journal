@@ -109,7 +109,7 @@ export async function POST(req: NextRequest) {
         takeProfit: tradeData.takeProfit !== undefined ? tradeData.takeProfit : null,
         exitPrice: exit,
         positionSize: tradeData.positionSize !== undefined ? tradeData.positionSize : null,
-        riskAmount: tradeData.riskAmount !== undefined ? tradeData.riskAmount : 300.0,
+        riskAmount: tradeData.riskAmount !== undefined ? tradeData.riskAmount : null,
         riskPercentage: tradeData.riskPercentage !== undefined ? tradeData.riskPercentage : null,
         plannedRR: metrics.plannedRR,
         possibleRR: possRR,

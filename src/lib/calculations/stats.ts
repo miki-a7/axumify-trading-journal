@@ -32,6 +32,35 @@ export interface TradeData {
   slippage?: number | null;
 }
 
+export interface TradeOutcomeInput {
+  riskAmount?: number | null;
+  actualRR?: number | null;
+  result?: string | null;
+}
+
+export interface TradeOutcome {
+  result: "WIN" | "LOSS" | "BREAKEVEN" | "OPEN";
+  actualR: number | null;
+  pnl: number | null;
+}
+
+/** Apply the platform outcome rules without using direction or Possible R:R. */
+export function calculateTradeOutcome(input: TradeOutcomeInput): TradeOutcome {
+  const result = String(input.result || "OPEN").toUpperCase();
+  const normalizedResult = result === "WIN" || result === "LOSS" || result === "BREAKEVEN" ? result : "OPEN";
+  const risk = input.riskAmount !== null && input.riskAmount !== undefined && Number.isFinite(Number(input.riskAmount))
+    ? Number(input.riskAmount)
+    : null;
+  const rr = input.actualRR !== null && input.actualRR !== undefined && Number.isFinite(Number(input.actualRR)) && Number(input.actualRR) > 0
+    ? Number(Math.abs(Number(input.actualRR)).toFixed(2))
+    : null;
+
+  if (normalizedResult === "LOSS") return { result: normalizedResult, actualR: -1, pnl: risk === null ? null : Number((-risk).toFixed(2)) };
+  if (normalizedResult === "BREAKEVEN") return { result: normalizedResult, actualR: 0, pnl: 0 };
+  if (normalizedResult === "WIN") return { result: normalizedResult, actualR: rr, pnl: risk === null || rr === null ? null : Number((risk * rr).toFixed(2)) };
+  return { result: "OPEN", actualR: null, pnl: null };
+}
+
 export interface PerformanceFilter {
   startDate?: string;
   endDate?: string;
@@ -405,10 +434,9 @@ export function calculateSingleTradeMetrics(input: {
   result: string;
 } {
   const dir = (input.direction || "LONG").toUpperCase();
-  const riskAmt =
-    input.riskAmount !== undefined && input.riskAmount !== null && !isNaN(Number(input.riskAmount))
-      ? Number(input.riskAmount)
-      : 300.0;
+  const riskAmt = input.riskAmount !== undefined && input.riskAmount !== null && Number.isFinite(Number(input.riskAmount))
+    ? Number(input.riskAmount)
+    : 0;
 
   const entry =
     input.entryPrice !== undefined && input.entryPrice !== null && !isNaN(Number(input.entryPrice))
@@ -424,7 +452,7 @@ export function calculateSingleTradeMetrics(input: {
       : null;
 
   // 1. Calculate R:R magnitude — user input takes precedence, then price-derived
-  let rrMagnitude = 2.0;
+  let rrMagnitude: number | null = null;
   if (
     input.actualR !== undefined &&
     input.actualR !== null &&
@@ -455,35 +483,13 @@ export function calculateSingleTradeMetrics(input: {
   }
 
   // 2. Determine Outcome: WIN, LOSS, BREAKEVEN
-  let result = (input.result || "WIN").toUpperCase();
-  if (result !== "WIN" && result !== "LOSS" && result !== "BREAKEVEN") {
-    result = "WIN";
-  }
-
-  let actualR: number;
-  let pnl: number;
-
-  if (result === "BREAKEVEN") {
-    actualR = 0.0;
-    pnl = 0.0;
-    result = "BREAKEVEN";
-  } else if (result === "WIN") {
-    actualR = rrMagnitude;
-    pnl = Number((riskAmt * rrMagnitude).toFixed(2));
-  } else if (result === "LOSS") {
-    actualR = -1.0;
-    pnl = Number((-riskAmt).toFixed(2));
-  } else {
-    actualR = 0.0;
-    pnl = 0.0;
-    result = "BREAKEVEN";
-  }
+  const outcome = calculateTradeOutcome({ riskAmount: input.riskAmount, actualRR: rrMagnitude, result: input.result });
 
   return {
-    plannedRR: rrMagnitude,
-    actualR,
-    pnl,
-    result,
+    plannedRR: rrMagnitude ?? 0,
+    actualR: outcome.actualR ?? 0,
+    pnl: outcome.pnl ?? 0,
+    result: outcome.result === "OPEN" ? "BREAKEVEN" : outcome.result,
   };
 }
 

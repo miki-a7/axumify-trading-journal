@@ -5,7 +5,7 @@
  */
 require("tsx/cjs");
 
-const { calculateSingleTradeMetrics } = require("./src/lib/calculations/stats.ts");
+const { calculateSingleTradeMetrics, calculateTradeOutcome } = require("./src/lib/calculations/stats.ts");
 const { parseTradingViewText } = require("./src/lib/ocr/tradingview.ts");
 
 let passed = 0;
@@ -172,6 +172,20 @@ console.log("AXUMIFY Calculation Tests\n");
   approx(detected.exitPrice, 99.75, "OCR: exit price");
   approx(detected.stopLoss, 101, "OCR: stop loss");
   approx(detected.takeProfit, 98, "OCR: take profit");
+}
+
+// Central outcome rules: positive RR input never changes a stopped-out loss
+{
+  const win = calculateTradeOutcome({ riskAmount: 100, actualRR: 5, result: "WIN" });
+  const loss = calculateTradeOutcome({ riskAmount: 100, actualRR: 5, result: "LOSS" });
+  const breakeven = calculateTradeOutcome({ riskAmount: 300, actualRR: 5, result: "BREAKEVEN" });
+  approx(win.actualR, 5, "WIN with 5R: actual R");
+  approx(win.pnl, 500, "WIN with 5R: P&L");
+  approx(loss.actualR, -1, "LOSS with 5R: actual R remains -1R");
+  approx(loss.pnl, -100, "LOSS with 5R: P&L uses risk only");
+  approx(breakeven.actualR, 0, "BREAKEVEN with 5R: actual R");
+  approx(breakeven.pnl, 0, "BREAKEVEN with 5R: P&L");
+  assert(calculateTradeOutcome({ result: "WIN" }).pnl === null, "Incomplete risk: WIN P&L is unavailable");
 }
 
 console.log(`\nTOTAL: ${passed} passed, ${failed} failed`);
